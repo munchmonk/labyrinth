@@ -38,8 +38,30 @@ class Tile(pygame.sprite.Sprite):
 	TOPBOTTOMLEFT = 'TOPBOTTOMLEFT'
 
 	# Treasures
-	RED_TREASURE = 'RED_TREASURE'
-	GREEN_TREASURE = 'GREEN_TREASURE'
+	TREASURE_1 = 'TREASURE_1'
+	TREASURE_2 = 'TREASURE_2'
+	TREASURE_3 = 'TREASURE_3'
+	TREASURE_4 = 'TREASURE_4'
+	TREASURE_5 = 'TREASURE_5'
+	TREASURE_6 = 'TREASURE_6'
+	TREASURE_7 = 'TREASURE_7'
+	TREASURE_8 = 'TREASURE_8'
+	TREASURE_9 = 'TREASURE_9'
+	TREASURE_10 = 'TREASURE_10'
+	TREASURE_11 = 'TREASURE_11'
+	TREASURE_12 = 'TREASURE_12'
+	TREASURE_13 = 'TREASURE_13'
+	TREASURE_14 = 'TREASURE_14'
+	TREASURE_15 = 'TREASURE_15'
+	TREASURE_16 = 'TREASURE_16'
+	TREASURE_17 = 'TREASURE_17'
+	TREASURE_18 = 'TREASURE_18'
+	TREASURE_19 = 'TREASURE_19'
+	TREASURE_20 = 'TREASURE_20'
+	TREASURE_21 = 'TREASURE_21'
+	TREASURE_22 = 'TREASURE_22'
+	TREASURE_23 = 'TREASURE_23'
+	TREASURE_24 = 'TREASURE_24'
 
 	# Images
 	BASETILES =    {TOPRIGHT: pygame.image.load('tiles/big_topright.png'),
@@ -62,8 +84,33 @@ class Tile(pygame.sprite.Sprite):
 					DUMMY: pygame.image.load('tiles/dummy.png')
 					}
 
-	TREASURE_IMAGES =  {RED_TREASURE: pygame.image.load('treasures/red.png'),
-						GREEN_TREASURE: pygame.image.load('treasures/green.png')}
+	TREASURE_IMAGES =  {TREASURE_1: pygame.image.load('treasures/treasure_1.png'),
+						TREASURE_2: pygame.image.load('treasures/treasure_2.png'),
+						TREASURE_3: pygame.image.load('treasures/treasure_3.png'),
+						TREASURE_4: pygame.image.load('treasures/treasure_4.png'),
+						TREASURE_5: pygame.image.load('treasures/treasure_5.png'),
+						TREASURE_6: pygame.image.load('treasures/treasure_6.png'),
+						TREASURE_7: pygame.image.load('treasures/treasure_7.png'),
+						TREASURE_8: pygame.image.load('treasures/treasure_8.png'),
+						TREASURE_9: pygame.image.load('treasures/treasure_9.png'),
+						TREASURE_10: pygame.image.load('treasures/treasure_10.png'),
+						TREASURE_11: pygame.image.load('treasures/treasure_11.png'),
+						TREASURE_12: pygame.image.load('treasures/treasure_12.png'),
+						TREASURE_13: pygame.image.load('treasures/treasure_13.png'),
+						TREASURE_14: pygame.image.load('treasures/treasure_14.png'),
+						TREASURE_15: pygame.image.load('treasures/treasure_15.png'),
+						TREASURE_16: pygame.image.load('treasures/treasure_16.png'),
+						TREASURE_17: pygame.image.load('treasures/treasure_17.png'),
+						TREASURE_18: pygame.image.load('treasures/treasure_18.png'),
+						TREASURE_19: pygame.image.load('treasures/treasure_19.png'),
+						TREASURE_20: pygame.image.load('treasures/treasure_20.png'),
+						TREASURE_21: pygame.image.load('treasures/treasure_21.png'),
+						TREASURE_22: pygame.image.load('treasures/treasure_22.png'),
+						TREASURE_23: pygame.image.load('treasures/treasure_23.png'),
+						TREASURE_24: pygame.image.load('treasures/treasure_24.png')}
+
+
+
 
 	def __init__(self, rect_x, rect_y, board_x, board_y, tiletype, treasure, *groups):
 		pygame.sprite.Sprite.__init__(self, *groups)
@@ -340,42 +387,85 @@ class Game:
 
 		return None
 
-	def create_fixed_tiles(self):
-		treasure = None
+	def get_random_treasure(self, remaining_tiles=0):
 
+		choice = None
+
+		options =  [Tile.TREASURE_1, Tile.TREASURE_2, Tile.TREASURE_3, Tile.TREASURE_4, Tile.TREASURE_5, Tile.TREASURE_6, Tile.TREASURE_7, Tile.TREASURE_8,
+					Tile.TREASURE_9, Tile.TREASURE_10, Tile.TREASURE_11, Tile.TREASURE_12, Tile.TREASURE_13, Tile.TREASURE_14, Tile.TREASURE_15, Tile.TREASURE_16,
+					Tile.TREASURE_17, Tile.TREASURE_18, Tile.TREASURE_19, Tile.TREASURE_20, Tile.TREASURE_21, Tile.TREASURE_22, Tile.TREASURE_23, Tile.TREASURE_24]
+
+		for tile in self.alltiles:
+			if tile.treasure in options:
+				options.remove(tile.treasure)
+
+		print('------')
+
+		if options:
+			print('# of treasures to allocate: ' + str(len(options)))
+			if remaining_tiles and remaining_tiles > len(options):
+				options += (remaining_tiles - len(options)) * [None]
+		
+			# return random.choice(options)
+
+			choice = random.choice(options)
+
+
+			# else:
+			# 	# print('Treasures to allocate: ', len(options))
+			# 	# print('Remaining tiles: ', remaining_tiles)
+			# 	options += (remaining_tiles - len(options)) * [None]
+			# 	# print('New options: ', options)
+
+
+		
+		
+		print('# of tiles yet to allocate: ' + str(remaining_tiles))
+		print('Treasure chosen: ' + str(choice))
+
+		# return None
+		return choice
+
+	def create_fixed_tiles(self):
 		# Corners
-		Tile(Game.LEFTBOARDMARGIN + 0 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 0 * Tile.TILESIZE, 0, 0, Tile.BOTTOMRIGHT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 6 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 0 * Tile.TILESIZE, 6, 0, Tile.BOTTOMLEFT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 6 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 6 * Tile.TILESIZE, 6, 6, Tile.TOPLEFT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 0 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 6 * Tile.TILESIZE, 0, 6, Tile.TOPRIGHT, treasure, self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 0 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 0 * Tile.TILESIZE, 0, 0, Tile.BOTTOMRIGHT, None, self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 6 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 0 * Tile.TILESIZE, 6, 0, Tile.BOTTOMLEFT, None, self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 6 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 6 * Tile.TILESIZE, 6, 6, Tile.TOPLEFT, None, self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 0 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 6 * Tile.TILESIZE, 0, 6, Tile.TOPRIGHT, None, self.allsprites, self.alltiles)
 
 		# Row 0
-		Tile(Game.LEFTBOARDMARGIN + 2 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 0 * Tile.TILESIZE, 2, 0, Tile.BOTTOMRIGHTLEFT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 4 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 0 * Tile.TILESIZE, 4, 0, Tile.BOTTOMRIGHTLEFT, treasure, self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 2 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 0 * Tile.TILESIZE, 2, 0, Tile.BOTTOMRIGHTLEFT, self.get_random_treasure(), self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 4 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 0 * Tile.TILESIZE, 4, 0, Tile.BOTTOMRIGHTLEFT, self.get_random_treasure(), self.allsprites, self.alltiles)
 
 		# Row 2
-		Tile(Game.LEFTBOARDMARGIN + 0 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 2 * Tile.TILESIZE, 0, 2, Tile.TOPBOTTOMRIGHT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 2 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 2 * Tile.TILESIZE, 2, 2, Tile.TOPBOTTOMRIGHT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 4 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 2 * Tile.TILESIZE, 4, 2, Tile.BOTTOMRIGHTLEFT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 6 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 2 * Tile.TILESIZE, 6, 2, Tile.TOPBOTTOMLEFT, treasure, self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 0 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 2 * Tile.TILESIZE, 0, 2, Tile.TOPBOTTOMRIGHT, self.get_random_treasure(), self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 2 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 2 * Tile.TILESIZE, 2, 2, Tile.TOPBOTTOMRIGHT, self.get_random_treasure(), self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 4 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 2 * Tile.TILESIZE, 4, 2, Tile.BOTTOMRIGHTLEFT, self.get_random_treasure(), self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 6 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 2 * Tile.TILESIZE, 6, 2, Tile.TOPBOTTOMLEFT, self.get_random_treasure(), self.allsprites, self.alltiles)
 
 		# Row 4
-		Tile(Game.LEFTBOARDMARGIN + 0 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 4 * Tile.TILESIZE, 0, 4, Tile.TOPBOTTOMRIGHT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 2 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 4 * Tile.TILESIZE, 2, 4, Tile.TOPRIGHTLEFT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 4 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 4 * Tile.TILESIZE, 4, 4, Tile.TOPBOTTOMLEFT, treasure, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 6 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 4 * Tile.TILESIZE, 6, 4, Tile.TOPBOTTOMLEFT, treasure, self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 0 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 4 * Tile.TILESIZE, 0, 4, Tile.TOPBOTTOMRIGHT, self.get_random_treasure(), self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 2 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 4 * Tile.TILESIZE, 2, 4, Tile.TOPRIGHTLEFT, self.get_random_treasure(), self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 4 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 4 * Tile.TILESIZE, 4, 4, Tile.TOPBOTTOMLEFT, self.get_random_treasure(), self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 6 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 4 * Tile.TILESIZE, 6, 4, Tile.TOPBOTTOMLEFT, self.get_random_treasure(), self.allsprites, self.alltiles)
 
 		# Row 6
-		Tile(Game.LEFTBOARDMARGIN + 2 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 6 * Tile.TILESIZE, 2, 6, Tile.TOPRIGHTLEFT, Tile.RED_TREASURE, self.allsprites, self.alltiles)
-		Tile(Game.LEFTBOARDMARGIN + 4 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 6 * Tile.TILESIZE, 4, 6, Tile.TOPRIGHTLEFT, Tile.GREEN_TREASURE, self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 2 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 6 * Tile.TILESIZE, 2, 6, Tile.TOPRIGHTLEFT, self.get_random_treasure(), self.allsprites, self.alltiles)
+		Tile(Game.LEFTBOARDMARGIN + 4 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 6 * Tile.TILESIZE, 4, 6, Tile.TOPRIGHTLEFT, self.get_random_treasure(), self.allsprites, self.alltiles)
 
 	def create_moving_tiles(self):
-		treasure = None
-
 		moving_tiles = []
 		moving_tiles += [Tile.TOPRIGHTLEFT for i in range(6)]
 		moving_tiles += [Tile.TOPBOTTOM for i in range(13)]
 		moving_tiles += [Tile.TOPLEFT for i in range(15)]
+		remaining_tiles_toprightleft = 6
+		remaining_tiles_topleft = 15
+
+
+
+		# REWRITE: EVERY TOPRIGHTLEFT (TRIPLE) TILE MUST HAVE A TREASURE
+
+
 
 		for i in range(7):
 			for j in range(7):
@@ -383,14 +473,40 @@ class Game:
 					tiletype = random.choice(moving_tiles)
 					moving_tiles.remove(tiletype)
 
+					if tiletype == Tile.TOPBOTTOM:
+						treasure = None
+					elif tiletype == Tile.TOPRIGHTLEFT:
+						treasure = self.get_random_treasure(remaining_tiles=remaining_tiles_toprightleft)
+						remaining_tiles_toprightleft -= 1
+					elif tiletype == Tile.TOPLEFT:
+						treasure = self.get_random_treasure(remaining_tiles=remaining_tiles_topleft)
+						remaining_tiles_topleft -= 1
+
+
+					print('Tile: (' + str(i) + ', ' + str(j) + ')')
+
+
 					new_tile = Tile(Game.LEFTBOARDMARGIN + i * Tile.TILESIZE, Game.TOPBOARDMARGIN + j * Tile.TILESIZE, i, j, 
 									tiletype, treasure, self.allsprites, self.alltiles)
 					new_tile.rotate(random_rotation=True)
 
 		last_tile = moving_tiles[0]
+		treasure = self.get_random_treasure(remaining_tiles=(remaining_tiles_topleft + remaining_tiles_toprightleft))
 		self.moving_tile = Tile(Game.LEFTBOARDMARGIN + 1 * Tile.TILESIZE, Game.TOPBOARDMARGIN + 7 * Tile.TILESIZE, 1, 7, 
 								last_tile, treasure, self.allsprites, self.alltiles)		
 		self.moving_tile.rotate(random_rotation=True)
+
+
+		tot_treasures = []
+		for tile in self.alltiles:
+			if tile.treasure:
+				tot_treasures.append('Treasure: ' + tile.treasure + ', tile: (' + str(tile.board_x) + ', ' + str(tile.board_y) + ')')
+		tot_treasures.sort()
+		for line in tot_treasures:
+			pass
+			print(line)
+		print('Tot: ' + str(len(tot_treasures)))
+
 
 	def create_players(self):
 		self.p1 = Player(Player.P1, 0, 6, self, self.allsprites, self.allplayers)
@@ -404,7 +520,6 @@ class Game:
 		if state == Game.TILE_MOVING_STATE:
 			pass
 		elif state == Game.PLAYER_MOVING_STATE:
-			# self.active_player = self.p1
 			pass
 
 
@@ -486,7 +601,7 @@ class Game:
 			for i in range(7):
 				tiles_to_push.append(self.find_tile_by_board_coord(6 - i, self.moving_tile.board_y))
 			players_to_push = self.get_players_to_push(tiles_to_push)
-			
+
 			for tile in tiles_to_push:
 				tile.board_x -= 1
 				tile.rect.x -= Tile.TILESIZE
