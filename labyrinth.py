@@ -131,7 +131,6 @@ class Tile(pygame.sprite.Sprite):
 
 		self.broadcast = None
 
-
 	def add_treasure(self, treasure):
 		if not treasure:
 			return
@@ -189,8 +188,6 @@ class Tile(pygame.sprite.Sprite):
 
 	def reset_broadcast(self):
 		self.broadcast = None
-
-		
 
 	def push(self):
 		self.signal = Tile.PUSH
@@ -283,6 +280,35 @@ class Tile(pygame.sprite.Sprite):
 		pass
 
 
+class Card(pygame.sprite.Sprite):
+	EMPTY_CARD_PATH = 'cards/empty_card.png'
+	TOP = 100
+	LEFT = 800
+
+	def __init__(self, *groups):
+		pygame.sprite.Sprite.__init__(self, *groups)
+
+		self.image, self.rect = None, None
+		self.reload_image()
+
+	def reload_image(self):
+		self.image = pygame.image.load(Card.EMPTY_CARD_PATH)
+		self.rect = self.image.get_rect(topleft=(Card.LEFT, Card.TOP))
+		
+	def add_treasure_image(self, treasure):
+		treasure_image = Tile.TREASURE_IMAGES[treasure]
+		self.reload_image()
+		left = self.rect.width // 2 - Tile.TILESIZE // 2
+		top = self.rect.height // 2 - Tile.TILESIZE // 2
+		self.image.blit(treasure_image, (left, top))		
+
+	def update(self, dt):
+		pass
+
+	def draw(self):
+		pass
+
+
 class Player(pygame.sprite.Sprite):
 	P1, P2 = 'P1', 'P2'
 	IMAGES =   {P1: pygame.image.load('players/p1.png'),
@@ -313,9 +339,44 @@ class Player(pygame.sprite.Sprite):
 
 		self.treasures = []
 		self.current_treasure_objective = None
+		self.card = Card(self.game.allsprites, self.game.allcards) if self.game.side else None
 
 		self.intent = None
 		self.signal = None
+
+		self.broadcast = None
+
+	def set_treasures(self, treasures):
+		self.current_treasure_objective = None
+		self.treasures = treasures
+
+		if not treasures:
+			return
+		
+		self.current_treasure_objective = self.treasures[0]
+
+		
+		# if self.player_id == Player.P1:
+		# 	self.card.add_treasure_image(self.current_treasure_objective)
+
+		if self.card and self.player_id == self.game.side:
+			self.card.add_treasure_image(self.current_treasure_objective)
+
+
+
+
+			# ----------------- RESUME HERE
+			# 4 cards on client, 2 cards on server instead of 1 and 1 ??????
+			print(self.game.allcards)
+
+
+
+	def set_broadcast(self):
+		if self.intent:
+			self.broadcast = ('Player', self.player_id, self.intent)
+
+	def reset_broadcast(self):
+		self.broadcast = None
 
 	def process_keyboard_input(self, key):
 		if key == pygame.K_RIGHT:
@@ -328,6 +389,8 @@ class Player(pygame.sprite.Sprite):
 			self.intent = Player.DOWN
 		elif key == pygame.K_RETURN:
 			self.intent = Player.CONFIRM_MOVEMENT
+
+		self.set_broadcast()
 
 	def move(self):
 		if (self.intent == Player.RIGHT and self.board_x < 6 and self.tile.right_open and
@@ -368,6 +431,7 @@ class Player(pygame.sprite.Sprite):
 				self.start_homerun()
 			else:
 				self.current_treasure_objective = self.treasures[0]
+				self.card.add_treasure_image(self.current_treasure_objective)
 
 				print('New objective: ', self.current_treasure_objective)
 
@@ -405,24 +469,34 @@ class ListenerThread(threading.Thread):
 		while True:
 			msg = self.my_socket.recv(1024)
 			msg = pickle.loads(msg)
-			print('I received this message: ', msg)
 
 			sprite_type = msg[0]
-			board_x, board_y = msg[1], msg[2]
-			intent = msg[3]
 
 			if sprite_type == 'Tile':
+				board_x, board_y = msg[1], msg[2]
+				intent = msg[3]
+
 				tile = self.game.find_tile_by_board_coord(board_x, board_y)
 				tile.intent = intent
 				tile.update(self.game.dt)
 				self.game.check_signals()
+
+			elif sprite_type == 'Player':
+				player_id = msg[1]
+				intent = msg[2]
+
+				player = self.game.find_player_by_id(player_id)
+				player.intent = intent
+				player.update(self.game.dt)
+				self.game.check_signals()
+
 
 
 class Game:
 	FPS = 45
 	SCRENWIDTH = 1280
 	SCREEHEIGHT = 768
-	LEFTBOARDMARGIN = 300
+	LEFTBOARDMARGIN = Tile.TILESIZE
 	TOPBOARDMARGIN = Tile.TILESIZE
 
 	# States
@@ -438,6 +512,7 @@ class Game:
 		self.allsprites = pygame.sprite.Group()
 		self.alltiles = pygame.sprite.Group()
 		self.allplayers = pygame.sprite.Group()
+		self.allcards = pygame.sprite.Group()
 
 		self.p1 = None
 		self.p2 = None
@@ -451,15 +526,21 @@ class Game:
 
 		self.setup()
 
-
 	def broadcast(self, message):
 		self.client_socket.send(pickle.dumps(message))
 
+	def find_player_by_id(self, player_id):
+		for player in self.allplayers:
+			if player.player_id == player_id:
+				return player
+
+		return None
 
 	def start_server(self):
+		self.side = Player.P1
+
 		# Setup to reset all states/variables to their starting state
 		self.setup()
-		self.side = Player.P1
 
 		server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		host = socket.gethostname()
@@ -478,33 +559,30 @@ class Game:
 		tiles_to_send = []
 		for tile in self.alltiles:
 			tiles_to_send.append((tile.rect.top, tile.rect.left, tile.board_x, tile.board_y, tile.tiletype, tile.treasure))
-		print('Sending tiles...')
 		self.client_socket.send(pickle.dumps(tiles_to_send))
-
 
 		# Receive confirmation
 		while True:
 			msg = self.client_socket.recv(1024).decode('ascii')
 			if msg == 'TILES OK':
-				print('Client confirmed it received the tiles.')
 				break
-
-
 
 		# Send players
 		players_to_send = []
 		for player in self.allplayers:
 			players_to_send.append((player.player_id, player.board_x, player.board_y, player.treasures))
-		print('Sending players...')
 		self.client_socket.send(pickle.dumps(players_to_send))
 
-		ListenerThread(self, self.client_socket).start()
+		# Reload treasures on P1 (server player) to populate the card
+		self.p1.set_treasures(self.p1.treasures)
 
+		ListenerThread(self, self.client_socket).start()
 	
 	def start_client(self):
+		self.side = Player.P2
+
 		# Setup to reset all states/variables to their starting state
 		self.setup()
-		self.side = Player.P2
 
 		self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		host = socket.gethostname()
@@ -517,24 +595,20 @@ class Game:
 		# Receive tiles
 		server_tiles = self.client_socket.recv(4096)
 		server_tiles = pickle.loads(server_tiles)
-		print('Received tiles.')
 
+		# Send confirmation message
 		self.client_socket.send('TILES OK'.encode('ascii'))
 
 		# Receive players
 		server_players = self.client_socket.recv(4096)
 		server_players = pickle.loads(server_players)
-		print('Received players.')
 
 		# Synchronise tiles and players
 		self.synchronise_clients(server_tiles, server_players)
 
 		ListenerThread(self, self.client_socket).start()
 
-
 	def synchronise_clients(self, new_tiles, new_players):
-		print('Synchronizing...')
-
 		# Tiles	
 		for tile in self.alltiles:
 			tile.kill()
@@ -552,8 +626,6 @@ class Game:
 			if board_x in (-1, 7) or board_y in (-1, 7):
 				self.moving_tile = new_tile
 
-
-
 		# Players
 		for player in self.allplayers:
 			player.kill()
@@ -566,15 +638,13 @@ class Game:
 			treasures = player[3]
 
 			new_player = Player(player_id, board_x, board_y, self, self.allsprites, self.allplayers)
-			new_player.treasures = treasures
-			new_player.current_treasure_objective = new_player.treasures[0]
+			new_player.set_treasures(treasures)
 
 			if player_id == Player.P1:
 				self.p1 = new_player
 			else:
 				self.p2 = new_player
 
-		# self.active_player = random.choice((self.p1, self.p2))
 		self.active_player = self.p1
 
 		print('Synchronization successful.')
@@ -686,11 +756,9 @@ class Game:
 
 		treasures = self.get_all_treasures()
 		random.shuffle(treasures)
-		self.p1.treasures += treasures[:12]
-		self.p2.treasures += treasures[12:]
 
-		self.p1.current_treasure_objective = self.p1.treasures[0]
-		self.p2.current_treasure_objective = self.p2.treasures[0]
+		self.p1.set_treasures(treasures[:12])
+		self.p2.set_treasures(treasures[12:])
 
 		self.active_player = self.p1
 
@@ -821,6 +889,10 @@ class Game:
 			if tile.broadcast:
 				self.broadcast(tile.broadcast)
 				tile.reset_broadcast()
+		for player in self.allplayers:
+			if player.broadcast:
+				self.broadcast(player.broadcast)
+				player.reset_broadcast()
 
 	def update(self):
 		self.allsprites.update(self.dt)
@@ -841,21 +913,15 @@ class Game:
 			self.start_server()
 		elif key == pygame.K_c:
 			self.start_client()
-		elif key == pygame.K_d:
-			self.client_socket.send(('I received: D!').encode('ascii'))
-		elif key == pygame.K_f:
-			self.client_socket.send(('I received: F!').encode('ascii'))
-		elif key == pygame.K_f:
-			self.client_socket.send(('I received: F!').encode('ascii'))
-
-
+		
 		if self.state == Game.TILE_MOVING_STATE:
 			if key in (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE, pygame.K_RETURN):
-				self.moving_tile.process_keyboard_input(key)
+				if not self.side or self.side == self.active_player.player_id:
+					self.moving_tile.process_keyboard_input(key)
 		elif self.state == Game.PLAYER_MOVING_STATE:
 			if key in (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE, pygame.K_RETURN):
-				self.active_player.process_keyboard_input(key)
-
+				if not self.side or self.side == self.active_player.player_id:
+					self.active_player.process_keyboard_input(key)
 
 	def run(self):
 		while True:
