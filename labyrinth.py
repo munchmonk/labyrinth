@@ -106,8 +106,6 @@ class Tile(pygame.sprite.Sprite):
 						TREASURE_24: pygame.image.load('treasures/treasure_24.png')}
 
 
-
-
 	def __init__(self, rect_x, rect_y, board_x, board_y, tiletype, *groups):
 		pygame.sprite.Sprite.__init__(self, *groups)
 
@@ -308,7 +306,6 @@ class Card(pygame.sprite.Sprite):
 	def draw(self):
 		pass
 
-
 class Player(pygame.sprite.Sprite):
 	P1, P2 = 'P1', 'P2'
 	IMAGES =   {P1: pygame.image.load('players/p1.png'),
@@ -339,7 +336,11 @@ class Player(pygame.sprite.Sprite):
 
 		self.treasures = []
 		self.current_treasure_objective = None
-		self.card = Card(self.game.allsprites, self.game.allcards) if self.game.side else None
+		
+		# Only create a card if a connection has been established
+		self.card = None
+		if self.game.side and self.game.side == self.player_id:
+			self.card = Card(self.game.allsprites, self.game.allcards)
 
 		self.intent = None
 		self.signal = None
@@ -355,21 +356,8 @@ class Player(pygame.sprite.Sprite):
 		
 		self.current_treasure_objective = self.treasures[0]
 
-		
-		# if self.player_id == Player.P1:
-		# 	self.card.add_treasure_image(self.current_treasure_objective)
-
 		if self.card and self.player_id == self.game.side:
 			self.card.add_treasure_image(self.current_treasure_objective)
-
-
-
-
-			# ----------------- RESUME HERE
-			# 4 cards on client, 2 cards on server instead of 1 and 1 ??????
-			print(self.game.allcards)
-
-
 
 	def set_broadcast(self):
 		if self.intent:
@@ -422,18 +410,15 @@ class Player(pygame.sprite.Sprite):
 		if self.current_treasure_objective == self.tile.treasure:
 			self.tile.remove_treasure()
 
-
 			print(self.player_id, ' obtained ', self.current_treasure_objective, '!')
-
 
 			self.treasures.pop(0)
 			if not self.treasures:
 				self.start_homerun()
 			else:
 				self.current_treasure_objective = self.treasures[0]
-				self.card.add_treasure_image(self.current_treasure_objective)
-
-				print('New objective: ', self.current_treasure_objective)
+				if self.card:
+					self.card.add_treasure_image(self.current_treasure_objective)
 
 	def set_tile(self):
 		self.tile = self.game.find_tile_by_board_coord(self.board_x, self.board_y)
@@ -491,6 +476,41 @@ class ListenerThread(threading.Thread):
 				self.game.check_signals()
 
 
+class Arrow(pygame.sprite.Sprite):
+	BASEIMAGES =   [pygame.image.load('assets/arrow.png'),
+					pygame.image.load('assets/blocked_arrow.png')]
+
+	NORMAL_IMAGES =     {Tile.UP: BASEIMAGES[0],
+						Tile.RIGHT: pygame.transform.rotate(BASEIMAGES[0], 270),
+						Tile.DOWN: pygame.transform.rotate(BASEIMAGES[0], 180),
+						Tile.LEFT: pygame.transform.rotate(BASEIMAGES[0], 90),
+						}
+
+	BLOCKED_IMAGES =   {Tile.UP: BASEIMAGES[1],
+						Tile.RIGHT: pygame.transform.rotate(BASEIMAGES[1], 270),
+						Tile.DOWN: pygame.transform.rotate(BASEIMAGES[1], 180),
+						Tile.LEFT: pygame.transform.rotate(BASEIMAGES[1], 90),
+						}
+
+
+	def __init__(self, board_x, board_y, orientation, *groups):
+		pygame.sprite.Sprite.__init__(self, *groups)
+
+		self.board_x, self.board_y = board_x, board_y
+		self.orientation = orientation
+		self.blocked = False
+
+		self.image = Arrow.NORMAL_IMAGES[self.orientation]
+		self.rect = self.image.get_rect(topleft=(Game.LEFTBOARDMARGIN + board_x * Tile.TILESIZE, Game.TOPBOARDMARGIN + board_y * Tile.TILESIZE))
+
+	def block(self):
+		self.blocked = True
+		self.image = Arrow.BLOCKED_IMAGES[self.orientation]
+
+	def unblock(self):
+		self.blocked = False
+		self.image = Arrow.NORMAL_IMAGES[self.orientation]
+
 
 class Game:
 	FPS = 45
@@ -513,12 +533,16 @@ class Game:
 		self.alltiles = pygame.sprite.Group()
 		self.allplayers = pygame.sprite.Group()
 		self.allcards = pygame.sprite.Group()
+		self.allarrows = pygame.sprite.Group()
+
+		self.print_order = [self.allarrows, self.allcards, self.alltiles, self.allplayers]
 
 		self.p1 = None
 		self.p2 = None
 		self.active_player = None
 		self.side = None
 		self.moving_tile = None
+		self.last_push = None
 
 		self.state = None
 
@@ -574,7 +598,9 @@ class Game:
 		self.client_socket.send(pickle.dumps(players_to_send))
 
 		# Reload treasures on P1 (server player) to populate the card
+		print('server, cards: ', self.allcards)
 		self.p1.set_treasures(self.p1.treasures)
+		print('server, cards: ', self.allcards)
 
 		ListenerThread(self, self.client_socket).start()
 	
@@ -583,6 +609,10 @@ class Game:
 
 		# Setup to reset all states/variables to their starting state
 		self.setup()
+
+		# Manually remove the card on the client created by the setup() call above to avoid creating two cards
+		for card in self.allcards:
+			card.kill()
 
 		self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		host = socket.gethostname()
@@ -762,11 +792,6 @@ class Game:
 
 		self.active_player = self.p1
 
-		print('P1 goals: ', self.p1.treasures)
-		print('P2 goals: ', self.p2.treasures)
-		print('P1: objective is ', self.p1.current_treasure_objective)
-		print('P2: objective is ', self.p2.current_treasure_objective)
-
 	def set_state(self, state):
 		self.state = state
 
@@ -775,14 +800,44 @@ class Game:
 		elif state == Game.PLAYER_MOVING_STATE:
 			pass
 
+	def create_arrows(self):
+		topleft_tile = self.find_tile_by_board_coord(0, 0)
+		topleft_x, topleft_y = topleft_tile.board_x, topleft_tile.board_y
+
+		# Top row
+		x, y = topleft_x + 1, topleft_y - 1
+		for i in range(3):
+			Arrow(x, y, Tile.DOWN, self.allsprites, self.allarrows)
+			x += 2
+
+		# Bottom row
+		x, y = topleft_x + 1, topleft_y + 7
+		for i in range(3):
+			Arrow(x, y, Tile.UP, self.allsprites, self.allarrows)
+			x += 2
+
+		# Left column
+		x, y = topleft_x - 1, topleft_y + 1
+		for i in range(3):
+			Arrow(x, y, Tile.RIGHT, self.allsprites, self.allarrows)
+			y += 2
+
+		# Right cloumn
+		x, y = topleft_x + 7, topleft_y + 1
+		for i in range(3):
+			Arrow(x, y, Tile.LEFT, self.allsprites, self.allarrows)
+			y += 2
+
 	def setup(self):
 		for sprite in self.allsprites:
 			sprite.kill()
 		self.p1, self.p2 = None, None
+		self.last_push = None
 
 		self.create_fixed_tiles()
 		self.create_moving_tiles()
 		self.create_players()
+		self.create_arrows()
 		self.set_state(Game.TILE_MOVING_STATE)
 
 	def quit(self):
@@ -799,7 +854,37 @@ class Game:
 					players_to_push.append(player)
 		return players_to_push
 
+	def is_push_legal(self):
+		if not self.last_push:
+			return True
+
+		if (self.moving_tile.board_x, self.moving_tile.board_y) == (self.last_push[0], self.last_push[1]):
+			return False
+		return True
+
+	def find_arrow_by_board_coord(self, board_x, board_y):
+		for arrow in self.allarrows:
+			if (arrow.board_x, arrow.board_y) == (board_x, board_y):
+				return arrow
+		return None
+
+	def set_last_push(self):
+		self.last_push = self.moving_tile.board_x, self.moving_tile.board_y
+
+		for arrow in self.allarrows:
+			if arrow.blocked:
+				arrow.unblock()
+				break
+
+		blocked_arrow = self.find_arrow_by_board_coord(*self.last_push)
+		blocked_arrow.block()
+
+
 	def push_tiles(self):
+		if not self.is_push_legal():
+			return
+
+		# self.set_last_push()
 		tiles_to_push = [self.moving_tile]
 
 		# Down -> up
@@ -869,6 +954,8 @@ class Game:
 		self.moving_tile = tiles_to_push[-1]
 		self.set_state(Game.PLAYER_MOVING_STATE)
 
+		self.set_last_push()
+
 	def check_signals(self):
 		if self.state == Game.TILE_MOVING_STATE:
 			if self.moving_tile.signal == Tile.PUSH:
@@ -901,7 +988,10 @@ class Game:
 
 	def draw(self):
 		self.screen.fill((0, 0, 0))
-		self.allsprites.draw(self.screen)
+
+		for sprite_group in self.print_order:
+			sprite_group.draw(self.screen)
+
 		pygame.display.flip()
 
 	def process_keyboard_input(self, key):
