@@ -1,6 +1,9 @@
 #!/Library/Frameworks/Python.framework/Versions/3.7/bin/python3
 
 import pygame
+import pygame.freetype
+pygame.init()
+
 import sys
 import random
 import socket
@@ -10,8 +13,6 @@ import threading
 
 class Tile(pygame.sprite.Sprite):
 	TILESIZE = 84
-
-	DUMMY = 'DUMMY'
 
 	# Movement
 	RIGHT = 'RIGHT'
@@ -66,45 +67,44 @@ class Tile(pygame.sprite.Sprite):
 	TREASURE_23 = 'TREASURE_23'
 	TREASURE_24 = 'TREASURE_24'
 
-	TILE_IMAGES =  {TOPRIGHT: pygame.image.load('tiles/topright.jpeg'),
-					BOTTOMRIGHT: pygame.image.load('tiles/bottomright.jpeg'),
-					BOTTOMLEFT: pygame.image.load('tiles/bottomleft.jpeg'),
-					TOPLEFT: pygame.image.load('tiles/topleft.jpeg'),
+	TILE_IMAGES =  {TOPRIGHT: pygame.image.load('assets/images/tiles/topright.png'),
+					BOTTOMRIGHT: pygame.image.load('assets/images/tiles/bottomright.png'),
+					BOTTOMLEFT: pygame.image.load('assets/images/tiles/bottomleft.png'),
+					TOPLEFT: pygame.image.load('assets/images/tiles/topleft.png'),
 
-					TOPRIGHTLEFT: pygame.image.load('tiles/toprightleft.jpeg'),
-					TOPBOTTOMRIGHT: pygame.image.load('tiles/topbottomright.jpeg'),
-					BOTTOMRIGHTLEFT: pygame.image.load('tiles/bottomrightleft.jpeg'),
-					TOPBOTTOMLEFT: pygame.image.load('tiles/topbottomleft.jpeg'),
+					TOPRIGHTLEFT: pygame.image.load('assets/images/tiles/toprightleft.png'),
+					TOPBOTTOMRIGHT: pygame.image.load('assets/images/tiles/topbottomright.png'),
+					BOTTOMRIGHTLEFT: pygame.image.load('assets/images/tiles/bottomrightleft.png'),
+					TOPBOTTOMLEFT: pygame.image.load('assets/images/tiles/topbottomleft.png'),
 
-					TOPBOTTOM: pygame.image.load('tiles/topbottom.jpeg'),
-					RIGHTLEFT: pygame.image.load('tiles/rightleft.jpeg'),
+					TOPBOTTOM: pygame.image.load('assets/images/tiles/topbottom.png'),
+					RIGHTLEFT: pygame.image.load('assets/images/tiles/rightleft.png'),
 					}
 
-	TREASURE_IMAGES =  {TREASURE_1: pygame.image.load('treasures/treasure_1.png'),
-						TREASURE_2: pygame.image.load('treasures/treasure_2.png'),
-						TREASURE_3: pygame.image.load('treasures/treasure_3.png'),
-						TREASURE_4: pygame.image.load('treasures/treasure_4.png'),
-						TREASURE_5: pygame.image.load('treasures/treasure_5.png'),
-						TREASURE_6: pygame.image.load('treasures/treasure_6.png'),
-						TREASURE_7: pygame.image.load('treasures/treasure_7.png'),
-						TREASURE_8: pygame.image.load('treasures/treasure_8.png'),
-						TREASURE_9: pygame.image.load('treasures/treasure_9.png'),
-						TREASURE_10: pygame.image.load('treasures/treasure_10.png'),
-						TREASURE_11: pygame.image.load('treasures/treasure_11.png'),
-						TREASURE_12: pygame.image.load('treasures/treasure_12.png'),
-						TREASURE_13: pygame.image.load('treasures/treasure_13.png'),
-						TREASURE_14: pygame.image.load('treasures/treasure_14.png'),
-						TREASURE_15: pygame.image.load('treasures/treasure_15.png'),
-						TREASURE_16: pygame.image.load('treasures/treasure_16.png'),
-						TREASURE_17: pygame.image.load('treasures/treasure_17.png'),
-						TREASURE_18: pygame.image.load('treasures/treasure_18.png'),
-						TREASURE_19: pygame.image.load('treasures/treasure_19.png'),
-						TREASURE_20: pygame.image.load('treasures/treasure_20.png'),
-						TREASURE_21: pygame.image.load('treasures/treasure_21.png'),
-						TREASURE_22: pygame.image.load('treasures/treasure_22.png'),
-						TREASURE_23: pygame.image.load('treasures/treasure_23.png'),
-						TREASURE_24: pygame.image.load('treasures/treasure_24.png')}
-
+	TREASURE_IMAGES =  {TREASURE_1: pygame.image.load('assets/images/treasures/treasure_1.png'),
+						TREASURE_2: pygame.image.load('assets/images/treasures/treasure_2.png'),
+						TREASURE_3: pygame.image.load('assets/images/treasures/treasure_3.png'),
+						TREASURE_4: pygame.image.load('assets/images/treasures/treasure_4.png'),
+						TREASURE_5: pygame.image.load('assets/images/treasures/treasure_5.png'),
+						TREASURE_6: pygame.image.load('assets/images/treasures/treasure_6.png'),
+						TREASURE_7: pygame.image.load('assets/images/treasures/treasure_7.png'),
+						TREASURE_8: pygame.image.load('assets/images/treasures/treasure_8.png'),
+						TREASURE_9: pygame.image.load('assets/images/treasures/treasure_9.png'),
+						TREASURE_10: pygame.image.load('assets/images/treasures/treasure_10.png'),
+						TREASURE_11: pygame.image.load('assets/images/treasures/treasure_11.png'),
+						TREASURE_12: pygame.image.load('assets/images/treasures/treasure_12.png'),
+						TREASURE_13: pygame.image.load('assets/images/treasures/treasure_13.png'),
+						TREASURE_14: pygame.image.load('assets/images/treasures/treasure_14.png'),
+						TREASURE_15: pygame.image.load('assets/images/treasures/treasure_15.png'),
+						TREASURE_16: pygame.image.load('assets/images/treasures/treasure_16.png'),
+						TREASURE_17: pygame.image.load('assets/images/treasures/treasure_17.png'),
+						TREASURE_18: pygame.image.load('assets/images/treasures/treasure_18.png'),
+						TREASURE_19: pygame.image.load('assets/images/treasures/treasure_19.png'),
+						TREASURE_20: pygame.image.load('assets/images/treasures/treasure_20.png'),
+						TREASURE_21: pygame.image.load('assets/images/treasures/treasure_21.png'),
+						TREASURE_22: pygame.image.load('assets/images/treasures/treasure_22.png'),
+						TREASURE_23: pygame.image.load('assets/images/treasures/treasure_23.png'),
+						TREASURE_24: pygame.image.load('assets/images/treasures/treasure_24.png')}
 
 	def __init__(self, rect_x, rect_y, board_x, board_y, tiletype, *groups):
 		pygame.sprite.Sprite.__init__(self, *groups)
@@ -178,7 +178,6 @@ class Tile(pygame.sprite.Sprite):
 			self.intent = Tile.PUSH
 
 		self.set_broadcast()
-
 
 	def set_broadcast(self):
 		if self.intent:
@@ -279,9 +278,9 @@ class Tile(pygame.sprite.Sprite):
 
 
 class Card(pygame.sprite.Sprite):
-	EMPTY_CARD_PATH = 'cards/empty_card.png'
-	TOP = 100
-	LEFT = 800
+	EMPTY_CARD_PATH = 'assets/images/cards/empty_card.png'
+	TOP = Tile.TILESIZE * 2
+	LEFT = 850
 
 	def __init__(self, *groups):
 		pygame.sprite.Sprite.__init__(self, *groups)
@@ -306,10 +305,11 @@ class Card(pygame.sprite.Sprite):
 	def draw(self):
 		pass
 
+
 class Player(pygame.sprite.Sprite):
 	P1, P2 = 'P1', 'P2'
-	IMAGES =   {P1: pygame.image.load('players/p1.png'),
-				P2: pygame.image.load('players/p2.png')}
+	IMAGES =   {P1: pygame.image.load('assets/images/players/p1.png'),
+				P2: pygame.image.load('assets/images/players/p2.png')}
 
 	# Movement
 	RIGHT = 'RIGHT'
@@ -319,6 +319,7 @@ class Player(pygame.sprite.Sprite):
 
 	# Signals
 	CONFIRM_MOVEMENT = 'CONFIRM_MOVEMENT'
+	VICTORY = 'VICTORY'
 
 	def __init__(self, player_id, board_x, board_y, game, *groups):
 		pygame.sprite.Sprite.__init__(self, *groups)
@@ -336,6 +337,7 @@ class Player(pygame.sprite.Sprite):
 
 		self.treasures = []
 		self.current_treasure_objective = None
+		self.homerun = False
 		
 		# Only create a card if a connection has been established
 		self.card = None
@@ -344,7 +346,6 @@ class Player(pygame.sprite.Sprite):
 
 		self.intent = None
 		self.signal = None
-
 		self.broadcast = None
 
 	def set_treasures(self, treasures):
@@ -403,16 +404,13 @@ class Player(pygame.sprite.Sprite):
 				self.rect.y += Tile.TILESIZE
 
 	def start_homerun(self):
-		# ---- to be continued -----
-		self.signal = Player.ALL_TREASURES_TAKEN
+		self.homerun = True
 
 	def check_treasure_collision(self):
 		if self.current_treasure_objective == self.tile.treasure:
 			self.tile.remove_treasure()
-
-			print(self.player_id, ' obtained ', self.current_treasure_objective, '!')
-
 			self.treasures.pop(0)
+
 			if not self.treasures:
 				self.start_homerun()
 			else:
@@ -425,6 +423,13 @@ class Player(pygame.sprite.Sprite):
 
 	def confirm_movement(self):
 		self.signal = Player.CONFIRM_MOVEMENT
+		self.check_treasure_collision()
+
+	def check_victory(self):
+		if self.player_id == Player.P1 and (self.board_x, self.board_y) == (0, 6):
+			self.signal = Player.VICTORY
+		elif self.player_id == Player.P2 and (self.board_x, self.board_y) == (6, 0):
+			self.signal = Player.VICTORY
 
 	def update(self, dt):
 		self.signal = None
@@ -434,8 +439,8 @@ class Player(pygame.sprite.Sprite):
 		elif self.intent == Player.CONFIRM_MOVEMENT:
 			self.confirm_movement()
 
-		if self.signal == Player.CONFIRM_MOVEMENT:
-			self.check_treasure_collision()
+			if self.homerun:
+				self.check_victory()
 
 		self.intent = None
 
@@ -477,19 +482,16 @@ class ListenerThread(threading.Thread):
 
 
 class Arrow(pygame.sprite.Sprite):
-	BASEIMAGES =   [pygame.image.load('assets/arrow.png'),
-					pygame.image.load('assets/blocked_arrow.png')]
-
-	NORMAL_IMAGES =     {Tile.UP: BASEIMAGES[0],
-						Tile.RIGHT: pygame.transform.rotate(BASEIMAGES[0], 270),
-						Tile.DOWN: pygame.transform.rotate(BASEIMAGES[0], 180),
-						Tile.LEFT: pygame.transform.rotate(BASEIMAGES[0], 90),
+	NORMAL_IMAGES =    {Tile.UP: pygame.image.load('assets/images/arrows/arrow_up.png'),
+						Tile.RIGHT: pygame.image.load('assets/images/arrows/arrow_right.png'),
+						Tile.DOWN: pygame.image.load('assets/images/arrows/arrow_down.png'),
+						Tile.LEFT: pygame.image.load('assets/images/arrows/arrow_left.png')
 						}
 
-	BLOCKED_IMAGES =   {Tile.UP: BASEIMAGES[1],
-						Tile.RIGHT: pygame.transform.rotate(BASEIMAGES[1], 270),
-						Tile.DOWN: pygame.transform.rotate(BASEIMAGES[1], 180),
-						Tile.LEFT: pygame.transform.rotate(BASEIMAGES[1], 90),
+	BLOCKED_IMAGES =   {Tile.UP: pygame.image.load('assets/images/arrows/arrow_up_blocked.png'),
+						Tile.RIGHT: pygame.image.load('assets/images/arrows/arrow_right_blocked.png'),
+						Tile.DOWN: pygame.image.load('assets/images/arrows/arrow_down_blocked.png'),
+						Tile.LEFT: pygame.image.load('assets/images/arrows/arrow_left_blocked.png')
 						}
 
 
@@ -512,30 +514,122 @@ class Arrow(pygame.sprite.Sprite):
 		self.image = Arrow.NORMAL_IMAGES[self.orientation]
 
 
+class TextBox(pygame.sprite.Sprite):
+	FONT_PATH = 'assets/fff_font.ttf'
+	BIG_FONT_SIZE = 100
+	SMALL_FONT_SIZE = 25
+	FONT_COLOR = (255, 0, 0)
+
+	BIG_FONT = pygame.freetype.Font(FONT_PATH, BIG_FONT_SIZE)
+	SMALL_FONT = pygame.freetype.Font(FONT_PATH, SMALL_FONT_SIZE)
+
+	# Textbox types - used for updating its text
+	TURN_REMINDER = 'TURN_REMINDER'
+	SCOREKEEPER_1 = 'SCOREKEEPER_1'
+	SCOREKEEPER_2 = 'SCOREKEEPER_2'
+
+
+	def __init__(self, text, font, game, textbox_type, *groups, right=None, left=None, centerx=None, centery=None, top=None, bottom=None):
+		pygame.sprite.Sprite.__init__(self, *groups)
+
+		self.font = font
+		self.color = TextBox.FONT_COLOR
+		self.text = text
+		self.image, self.rect = self.font.render(text, self.color)
+		self.game = game
+		self.textbox_type = textbox_type
+
+		self.right = right
+		self.left = left
+		self.centerx = centerx
+		self.centery = centery
+		self.top = top
+		self.bottom = bottom
+	
+		self.adjust_rect()
+
+	def adjust_rect(self):
+		if self.right:
+			self.rect.right = self.right
+		if self.left:
+			self.rect.left = self.left
+		if self.centerx:
+			self.rect.centerx = self.centerx
+		if self.centery:
+			self.rect.centery = self.centery
+		if self.top:
+			self.rect.top = self.top
+		if self.bottom:
+			self.rect.bottom = self.bottom
+
+	def change_text(self, new_text):
+		self.image, self.rect = self.font.render(new_text, self.color)
+		self.adjust_rect()
+
+	def update(self, dt):
+		msg = ''
+
+		if self.textbox_type == TextBox.TURN_REMINDER:
+			if self.game.active_player.player_id == Player.P1:
+				msg += 'Player 1,'
+			elif self.game.active_player.player_id == Player.P2:
+				msg += 'Player 2,'
+
+			if self.game.state == Game.TILE_MOVING_STATE:
+				msg += ' move a tile!'
+			elif self.game.state == Game.PLAYER_MOVING_STATE:
+				msg += ' move your character!'
+
+		elif self.textbox_type == TextBox.SCOREKEEPER_1:
+			tot_treasures = Game.TOT_TREASURES // len(self.game.allplayers)
+			treasures_caught = tot_treasures - len(self.game.p1.treasures)
+
+			msg += 'Player 1: '
+			msg += str(treasures_caught)
+			msg += ' / '
+			msg += str(tot_treasures)
+
+		elif self.textbox_type == TextBox.SCOREKEEPER_2:
+			tot_treasures = Game.TOT_TREASURES // len(self.game.allplayers)
+			treasures_caught = tot_treasures - len(self.game.p2.treasures)
+
+			msg += 'Player 2: '
+			msg += str(treasures_caught)
+			msg += ' / '
+			msg += str(tot_treasures)
+
+		self.change_text(msg)
+
+
 class Game:
-	FPS = 45
+	FPS = 30
 	SCRENWIDTH = 1280
 	SCREEHEIGHT = 768
 	LEFTBOARDMARGIN = Tile.TILESIZE
 	TOPBOARDMARGIN = Tile.TILESIZE
 
+	TOT_TREASURES = 24
+
 	# States
 	TILE_MOVING_STATE = 'TILE_MOVING_STATE'
 	PLAYER_MOVING_STATE = 'PLAYER_MOVING_STATE'
+	GAMEOVER_STATE = 'GAMEOVER_STATE'
 
 	def __init__(self):
 		# self.screen = pygame.display.set_mode((Game.SCRENWIDTH, Game.SCREEHEIGHT), pygame.FULLSCREEN)
 		self.screen = pygame.display.set_mode((Game.SCRENWIDTH, Game.SCREEHEIGHT))
 		self.clock = pygame.time.Clock()
 		self.dt = 0
+		self.fullscreen = False
 
 		self.allsprites = pygame.sprite.Group()
 		self.alltiles = pygame.sprite.Group()
 		self.allplayers = pygame.sprite.Group()
 		self.allcards = pygame.sprite.Group()
 		self.allarrows = pygame.sprite.Group()
+		self.alltextboxes = pygame.sprite.Group()
 
-		self.print_order = [self.allarrows, self.allcards, self.alltiles, self.allplayers]
+		self.print_order = [self.allarrows, self.allcards, self.alltiles, self.allplayers, self.alltextboxes]
 
 		self.p1 = None
 		self.p2 = None
@@ -549,6 +643,16 @@ class Game:
 		self.client_socket = None
 
 		self.setup()
+
+	def toggle_fullscreen(self):
+		self.fullscreen = not self.fullscreen
+
+		if self.fullscreen:
+			pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+			pygame.mouse.set_visible(False)
+		else:
+			pygame.display.set_mode((Game.SCRENWIDTH, Game.SCREEHEIGHT))
+			pygame.mouse.set_visible(True)
 
 	def broadcast(self, message):
 		self.client_socket.send(pickle.dumps(message))
@@ -795,10 +899,16 @@ class Game:
 	def set_state(self, state):
 		self.state = state
 
-		if state == Game.TILE_MOVING_STATE:
-			pass
-		elif state == Game.PLAYER_MOVING_STATE:
-			pass
+		if state == Game.GAMEOVER_STATE:
+			winner = 'Player 1' if self.active_player == self.p1 else 'Player 2'
+			for textbox in self.alltextboxes:
+				if textbox.textbox_type == TextBox.TURN_REMINDER:
+					reminder_textbox = textbox
+
+			reminder_textbox.change_text(winner + ' won!!!')
+
+
+
 
 	def create_arrows(self):
 		topleft_tile = self.find_tile_by_board_coord(0, 0)
@@ -828,6 +938,22 @@ class Game:
 			Arrow(x, y, Tile.LEFT, self.allsprites, self.allarrows)
 			y += 2
 
+	def create_reminder_textbox(self):
+		last_tile = self.find_tile_by_board_coord(6, 0)
+		top, left = last_tile.rect.top, last_tile.rect.left + Tile.TILESIZE * 2
+
+		TextBox('', TextBox.SMALL_FONT, self, TextBox.TURN_REMINDER, self.allsprites, self.alltextboxes, top=top, left=left)
+
+	def create_score_textboxes(self):
+		last_tile = self.find_tile_by_board_coord(6, 0)
+		left = last_tile.rect.left + Tile.TILESIZE * 2
+
+		top_1 = 600
+		top_2 = top_1 + 100
+
+		TextBox('score', TextBox.SMALL_FONT, self, TextBox.SCOREKEEPER_1, self.allsprites, self.alltextboxes, top=top_1, left=left)
+		TextBox('score', TextBox.SMALL_FONT, self, TextBox.SCOREKEEPER_2, self.allsprites, self.alltextboxes, top=top_2, left=left)
+
 	def setup(self):
 		for sprite in self.allsprites:
 			sprite.kill()
@@ -838,7 +964,9 @@ class Game:
 		self.create_moving_tiles()
 		self.create_players()
 		self.create_arrows()
-		self.set_state(Game.TILE_MOVING_STATE)
+		self.create_reminder_textbox()
+		self.create_score_textboxes()
+		self.set_state(Game.TILE_MOVING_STATE)	
 
 	def quit(self):
 		if self.client_socket:
@@ -878,7 +1006,6 @@ class Game:
 
 		blocked_arrow = self.find_arrow_by_board_coord(*self.last_push)
 		blocked_arrow.block()
-
 
 	def push_tiles(self):
 		if not self.is_push_legal():
@@ -960,6 +1087,7 @@ class Game:
 		if self.state == Game.TILE_MOVING_STATE:
 			if self.moving_tile.signal == Tile.PUSH:
 				self.push_tiles()
+
 		elif self.state == Game.PLAYER_MOVING_STATE:
 			if self.active_player.signal == Player.CONFIRM_MOVEMENT:
 				if self.active_player == self.p1:
@@ -967,6 +1095,9 @@ class Game:
 				else:
 					self.active_player = self.p1
 				self.set_state(Game.TILE_MOVING_STATE)
+
+			elif self.active_player.signal == Player.VICTORY:
+				self.set_state(Game.GAMEOVER_STATE)
 
 	def check_broadcasts(self):
 		if not self.client_socket:
@@ -982,12 +1113,13 @@ class Game:
 				player.reset_broadcast()
 
 	def update(self):
-		self.allsprites.update(self.dt)
-		self.check_signals()
-		self.check_broadcasts()
+		if self.state != Game.GAMEOVER_STATE:
+			self.allsprites.update(self.dt)
+			self.check_signals()
+			self.check_broadcasts()
 
 	def draw(self):
-		self.screen.fill((0, 0, 0))
+		self.screen.fill((0, 30, 130))
 
 		for sprite_group in self.print_order:
 			sprite_group.draw(self.screen)
@@ -997,11 +1129,13 @@ class Game:
 	def process_keyboard_input(self, key):
 		if key == pygame.K_ESCAPE:
 			self.quit()
-		elif key == pygame.K_r:
+		elif key == pygame.K_w:
+			self.toggle_fullscreen()
+		elif key == pygame.K_r and not self.side:
 			self.setup()
-		elif key == pygame.K_s:
+		elif key == pygame.K_s and not self.side:
 			self.start_server()
-		elif key == pygame.K_c:
+		elif key == pygame.K_c and not self.side:
 			self.start_client()
 		
 		if self.state == Game.TILE_MOVING_STATE:
