@@ -3,6 +3,9 @@
 import pygame
 import sys
 import random
+import socket
+import pickle
+import threading
 
 
 class Tile(pygame.sprite.Sprite):
@@ -63,25 +66,18 @@ class Tile(pygame.sprite.Sprite):
 	TREASURE_23 = 'TREASURE_23'
 	TREASURE_24 = 'TREASURE_24'
 
-	# Images
-	BASETILES =    {TOPRIGHT: pygame.image.load('tiles/big_topright.png'),
-					TOPRIGHTLEFT: pygame.image.load('tiles/big_toprightleft.png'),
-					TOPBOTTOM: pygame.image.load('tiles/big_topdown.png')}
+	TILE_IMAGES =  {TOPRIGHT: pygame.image.load('tiles/topright.jpeg'),
+					BOTTOMRIGHT: pygame.image.load('tiles/bottomright.jpeg'),
+					BOTTOMLEFT: pygame.image.load('tiles/bottomleft.jpeg'),
+					TOPLEFT: pygame.image.load('tiles/topleft.jpeg'),
 
-	TILE_IMAGES =  {TOPRIGHT: BASETILES[TOPRIGHT],
-					BOTTOMRIGHT: pygame.transform.rotate(BASETILES[TOPRIGHT], 270),
-					BOTTOMLEFT: pygame.transform.rotate(BASETILES[TOPRIGHT], 180),
-					TOPLEFT: pygame.transform.rotate(BASETILES[TOPRIGHT], 90),
+					TOPRIGHTLEFT: pygame.image.load('tiles/toprightleft.jpeg'),
+					TOPBOTTOMRIGHT: pygame.image.load('tiles/topbottomright.jpeg'),
+					BOTTOMRIGHTLEFT: pygame.image.load('tiles/bottomrightleft.jpeg'),
+					TOPBOTTOMLEFT: pygame.image.load('tiles/topbottomleft.jpeg'),
 
-					TOPRIGHTLEFT: BASETILES[TOPRIGHTLEFT],
-					TOPBOTTOMRIGHT: pygame.transform.rotate(BASETILES[TOPRIGHTLEFT], 270),
-					BOTTOMRIGHTLEFT: pygame.transform.rotate(BASETILES[TOPRIGHTLEFT], 180),
-					TOPBOTTOMLEFT: pygame.transform.rotate(BASETILES[TOPRIGHTLEFT], 90),
-
-					TOPBOTTOM: BASETILES[TOPBOTTOM],
-					RIGHTLEFT: pygame.transform.rotate(BASETILES[TOPBOTTOM], 90),
-
-					DUMMY: pygame.image.load('tiles/dummy.png')
+					TOPBOTTOM: pygame.image.load('tiles/topbottom.jpeg'),
+					RIGHTLEFT: pygame.image.load('tiles/rightleft.jpeg'),
 					}
 
 	TREASURE_IMAGES =  {TREASURE_1: pygame.image.load('treasures/treasure_1.png'),
@@ -133,11 +129,18 @@ class Tile(pygame.sprite.Sprite):
 		self.intent = None
 		self.signal = None
 
+		self.broadcast = None
+
+
 	def add_treasure(self, treasure):
 		if not treasure:
 			return
 		self.treasure = treasure
 		self.add_treasure_image()
+
+	def remove_treasure(self):
+		self.treasure = None
+		self.set_image()
 	
 	def set_borders(self):
 		self.right_open = False
@@ -176,6 +179,18 @@ class Tile(pygame.sprite.Sprite):
 			self.intent = Tile.ROTATE
 		elif key == pygame.K_RETURN:
 			self.intent = Tile.PUSH
+
+		self.set_broadcast()
+
+
+	def set_broadcast(self):
+		if self.intent:
+			self.broadcast = ('Tile', self.board_x, self.board_y, self.intent)
+
+	def reset_broadcast(self):
+		self.broadcast = None
+
+		
 
 	def push(self):
 		self.signal = Tile.PUSH
@@ -342,6 +357,7 @@ class Player(pygame.sprite.Sprite):
 
 	def check_treasure_collision(self):
 		if self.current_treasure_objective == self.tile.treasure:
+			self.tile.remove_treasure()
 
 
 			print(self.player_id, ' obtained ', self.current_treasure_objective, '!')
@@ -378,6 +394,30 @@ class Player(pygame.sprite.Sprite):
 		pass
 
 
+class ListenerThread(threading.Thread):
+	def __init__(self, game, my_socket):
+		threading.Thread.__init__(self)
+
+		self.game = game
+		self.my_socket = my_socket
+
+	def run(self):
+		while True:
+			msg = self.my_socket.recv(1024)
+			msg = pickle.loads(msg)
+			print('I received this message: ', msg)
+
+			sprite_type = msg[0]
+			board_x, board_y = msg[1], msg[2]
+			intent = msg[3]
+
+			if sprite_type == 'Tile':
+				tile = self.game.find_tile_by_board_coord(board_x, board_y)
+				tile.intent = intent
+				tile.update(self.game.dt)
+				self.game.check_signals()
+
+
 class Game:
 	FPS = 45
 	SCRENWIDTH = 1280
@@ -402,11 +442,142 @@ class Game:
 		self.p1 = None
 		self.p2 = None
 		self.active_player = None
+		self.side = None
 		self.moving_tile = None
 
 		self.state = None
 
+		self.client_socket = None
+
 		self.setup()
+
+
+	def broadcast(self, message):
+		self.client_socket.send(pickle.dumps(message))
+
+
+	def start_server(self):
+		# Setup to reset all states/variables to their starting state
+		self.setup()
+		self.side = Player.P1
+
+		server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		host = socket.gethostname()
+		port = 9999
+
+		server_socket.bind((host, port))
+		server_socket.listen()
+
+		print('I set up a server, listening for a connection...')
+
+		self.client_socket, client_address = server_socket.accept()
+
+		print('I received a connection from: ' + str(client_address))
+
+		# Send tiles
+		tiles_to_send = []
+		for tile in self.alltiles:
+			tiles_to_send.append((tile.rect.top, tile.rect.left, tile.board_x, tile.board_y, tile.tiletype, tile.treasure))
+		print('Sending tiles...')
+		self.client_socket.send(pickle.dumps(tiles_to_send))
+
+
+		# Receive confirmation
+		while True:
+			msg = self.client_socket.recv(1024).decode('ascii')
+			if msg == 'TILES OK':
+				print('Client confirmed it received the tiles.')
+				break
+
+
+
+		# Send players
+		players_to_send = []
+		for player in self.allplayers:
+			players_to_send.append((player.player_id, player.board_x, player.board_y, player.treasures))
+		print('Sending players...')
+		self.client_socket.send(pickle.dumps(players_to_send))
+
+		ListenerThread(self, self.client_socket).start()
+
+	
+	def start_client(self):
+		# Setup to reset all states/variables to their starting state
+		self.setup()
+		self.side = Player.P2
+
+		self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		host = socket.gethostname()
+		port = 9999
+
+		self.client_socket.connect((host, port))
+
+		print('Connected to server: ' + str(host))
+
+		# Receive tiles
+		server_tiles = self.client_socket.recv(4096)
+		server_tiles = pickle.loads(server_tiles)
+		print('Received tiles.')
+
+		self.client_socket.send('TILES OK'.encode('ascii'))
+
+		# Receive players
+		server_players = self.client_socket.recv(4096)
+		server_players = pickle.loads(server_players)
+		print('Received players.')
+
+		# Synchronise tiles and players
+		self.synchronise_clients(server_tiles, server_players)
+
+		ListenerThread(self, self.client_socket).start()
+
+
+	def synchronise_clients(self, new_tiles, new_players):
+		print('Synchronizing...')
+
+		# Tiles	
+		for tile in self.alltiles:
+			tile.kill()
+
+		for tile in new_tiles:
+			rect_x, rect_y = tile[1], tile[0]
+			board_x, board_y = tile[2], tile[3]
+			tiletype = tile[4]
+			treasure = tile[5]
+
+			new_tile = Tile(rect_x, rect_y, board_x, board_y, tiletype, self.allsprites, self.alltiles)
+			new_tile.add_treasure(treasure)
+
+			# Set the moving tile!
+			if board_x in (-1, 7) or board_y in (-1, 7):
+				self.moving_tile = new_tile
+
+
+
+		# Players
+		for player in self.allplayers:
+			player.kill()
+		self.p1 = None
+		self.p2 = None
+
+		for player in new_players:
+			player_id = player[0]
+			board_x, board_y = player[1], player[2]
+			treasures = player[3]
+
+			new_player = Player(player_id, board_x, board_y, self, self.allsprites, self.allplayers)
+			new_player.treasures = treasures
+			new_player.current_treasure_objective = new_player.treasures[0]
+
+			if player_id == Player.P1:
+				self.p1 = new_player
+			else:
+				self.p2 = new_player
+
+		# self.active_player = random.choice((self.p1, self.p2))
+		self.active_player = self.p1
+
+		print('Synchronization successful.')
 
 	def find_tile_by_board_coord(self, board_x, board_y):
 		for tile in self.alltiles:
@@ -536,11 +707,10 @@ class Game:
 		elif state == Game.PLAYER_MOVING_STATE:
 			pass
 
-
-
 	def setup(self):
-		self.allsprites.empty()
-		self.alltiles.empty()
+		for sprite in self.allsprites:
+			sprite.kill()
+		self.p1, self.p2 = None, None
 
 		self.create_fixed_tiles()
 		self.create_moving_tiles()
@@ -548,6 +718,8 @@ class Game:
 		self.set_state(Game.TILE_MOVING_STATE)
 
 	def quit(self):
+		if self.client_socket:
+			self.client_socket.close()
 		pygame.quit()
 		sys.exit()
 
@@ -641,9 +813,19 @@ class Game:
 					self.active_player = self.p1
 				self.set_state(Game.TILE_MOVING_STATE)
 
+	def check_broadcasts(self):
+		if not self.client_socket:
+			return
+
+		for tile in self.alltiles:
+			if tile.broadcast:
+				self.broadcast(tile.broadcast)
+				tile.reset_broadcast()
+
 	def update(self):
 		self.allsprites.update(self.dt)
 		self.check_signals()
+		self.check_broadcasts()
 
 	def draw(self):
 		self.screen.fill((0, 0, 0))
@@ -655,6 +837,17 @@ class Game:
 			self.quit()
 		elif key == pygame.K_r:
 			self.setup()
+		elif key == pygame.K_s:
+			self.start_server()
+		elif key == pygame.K_c:
+			self.start_client()
+		elif key == pygame.K_d:
+			self.client_socket.send(('I received: D!').encode('ascii'))
+		elif key == pygame.K_f:
+			self.client_socket.send(('I received: F!').encode('ascii'))
+		elif key == pygame.K_f:
+			self.client_socket.send(('I received: F!').encode('ascii'))
+
 
 		if self.state == Game.TILE_MOVING_STATE:
 			if key in (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE, pygame.K_RETURN):
@@ -671,7 +864,6 @@ class Game:
 					self.quit()
 				elif event.type == pygame.KEYDOWN:
 					self.process_keyboard_input(event.key)
-
 
 			self.update()
 			self.draw()
