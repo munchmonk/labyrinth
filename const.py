@@ -54,6 +54,8 @@ TREASURE_24 = 'TREASURE_24'
 TURN_REMINDER = 'TURN_REMINDER'
 SCOREKEEPER_1 = 'SCOREKEEPER_1'
 SCOREKEEPER_2 = 'SCOREKEEPER_2'
+SCOREKEEPER_3 = 'SCOREKEEPER_3'
+SCOREKEEPER_4 = 'SCOREKEEPER_4'
 
 #	- game states
 TILE_MOVING_STATE = 'TILE_MOVING_STATE'
@@ -110,6 +112,11 @@ SOUND_PATH = os.path.join(os.path.dirname(__file__), 'assets/sounds/')
 # ---------------------------------------------------
 # Assets
 #	- images
+PLAYER_IMAGES =    {P1: pygame.image.load(PLAYER_IMAGE_PATH + 'p1.png'),
+					P2: pygame.image.load(PLAYER_IMAGE_PATH + 'p2.png'),
+					P3: pygame.image.load(PLAYER_IMAGE_PATH + 'p3.png'),
+					P4: pygame.image.load(PLAYER_IMAGE_PATH + 'p4.png')}
+
 TREASURE_IMAGES =  {TREASURE_1:  pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_1.png'),
 					TREASURE_2:  pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_2.png'),
 					TREASURE_3:  pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_3.png'),

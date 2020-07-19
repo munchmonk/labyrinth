@@ -16,18 +16,18 @@ import const
 
 
 class Player(pygame.sprite.Sprite):
-	IMAGES =   {const.P1: pygame.image.load(const.PLAYER_IMAGE_PATH + 'p1.png'),
-				const.P2: pygame.image.load(const.PLAYER_IMAGE_PATH + 'p2.png')}
-
-	def __init__(self, player_id, board_x, board_y, game, *groups):
+	def __init__(self, player_id, bot, board_x, board_y, game, *groups):
 		pygame.sprite.Sprite.__init__(self, *groups)
 
-		self.game = game
+		self.game = game	
 
 		self.board_x, self.board_y = board_x, board_y
 		self.player_id = player_id
 
-		self.image = Player.IMAGES[self.player_id]
+		self.bot = bot
+		self.attempts = []
+
+		self.image = const.PLAYER_IMAGES[self.player_id]
 		self.rect = self.image.get_rect(topleft=(const.LEFTBOARDMARGIN + const.TILESIZE * self.board_x, const.TOPBOARDMARGIN + const.TILESIZE * self.board_y))
 
 		self.tile = None
@@ -172,8 +172,38 @@ class Player(pygame.sprite.Sprite):
 					self.rect.x += 7 * const.TILESIZE
 					self.set_tile()
 
+	def get_bot_tile_move(self):
+		if not self.attempts:
+			self.attempts.append(random.choice((pygame.K_UP, pygame.K_DOWN, pygame.K_RIGHT, pygame.K_LEFT)))
+			self.game.moving_tile.process_keyboard_input(self.attempts[0])
+		else:
+	 		self.attempts = []
+	 		self.game.moving_tile.process_keyboard_input(pygame.K_RETURN)
+
+	def get_bot_player_move(self):
+		if self.game.is_anything_pushing():
+			return
+
+		if not self.attempts:
+			for i in range(5):
+				self.attempts.append(random.choice((pygame.K_UP, pygame.K_DOWN, pygame.K_RIGHT, pygame.K_LEFT)))
+		elif len(self.attempts) == 1:
+			self.process_keyboard_input(pygame.K_RETURN)
+		else:
+			self.process_keyboard_input(self.attempts.pop())
+
+	def get_bot_action(self):
+		if self.game.state == const.TILE_MOVING_STATE:
+			self.get_bot_tile_move()
+
+		elif self.game.state == const.PLAYER_MOVING_STATE:
+			self.get_bot_player_move()
+
 	def update(self, dt):
 		self.signal = None
+
+		if self.bot and self.game.active_player == self:
+			self.get_bot_action()
 
 		if self.intent in (const.UP, const.DOWN, const.RIGHT, const.LEFT):
 			self.move()
@@ -514,6 +544,10 @@ class TextBox(pygame.sprite.Sprite):
 				msg += 'Player 1,'
 			elif self.game.active_player.player_id == const.P2:
 				msg += 'Player 2,'
+			elif self.game.active_player.player_id == const.P3:
+				msg += 'Player 3,'
+			elif self.game.active_player.player_id == const.P4:
+				msg += 'Player 4,'
 
 			if self.game.state == const.TILE_MOVING_STATE:
 				msg += ' move a tile!'
@@ -538,15 +572,29 @@ class TextBox(pygame.sprite.Sprite):
 			msg += ' / '
 			msg += str(tot_treasures)
 
+		elif self.textbox_type == const.SCOREKEEPER_3:
+			tot_treasures = const.TOT_TREASURES // len(self.game.allplayers)
+			treasures_caught = tot_treasures - len(self.game.p3.treasures)
+
+			msg += 'Player 3: '
+			msg += str(treasures_caught)
+			msg += ' / '
+			msg += str(tot_treasures)
+
+		elif self.textbox_type == const.SCOREKEEPER_4:
+			tot_treasures = const.TOT_TREASURES // len(self.game.allplayers)
+			treasures_caught = tot_treasures - len(self.game.p4.treasures)			
+
+			msg += 'Player 4: '
+			msg += str(treasures_caught)
+			msg += ' / '
+			msg += str(tot_treasures)
+
 		self.change_text(msg)
 
 
 class Game:
-	# Background image
-	# BACKGROUND_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/backgrounds/')
-
 	def __init__(self):
-		# self.screen = pygame.display.set_mode((const.SCREENWIDTH, const.SCREENHEIGHT), pygame.FULLSCREEN)
 		self.screen = pygame.display.set_mode((const.SCREENWIDTH, const.SCREENHEIGHT))
 		self.clock = pygame.time.Clock()
 		self.dt = 0
@@ -559,12 +607,17 @@ class Game:
 		self.allarrows = pygame.sprite.Group()
 		self.alltextboxes = pygame.sprite.Group()
 
+		self.update_order = [self.allplayers, self.alltiles, self.allarrows, self.allcards, self.alltextboxes]
 		self.print_order = [self.allarrows, self.allcards, self.alltiles, self.allplayers, self.alltextboxes]
 
 		self.p1 = None
 		self.p2 = None
+		self.p3 = None
+		self.p4 = None
 		self.active_player = None
+		self.acting_order = []
 		self.side = None
+
 		self.moving_tile = None
 		self.last_push = None
 
@@ -597,8 +650,14 @@ class Game:
 	def start_server(self):
 		self.side = const.P1
 
+		number_of_bots = len(self.allplayers) - 2
+
 		# Setup to reset all states/variables to their starting state
 		self.setup()
+
+		# Add bots back if applicable
+		for i in range(number_of_bots):
+			self.add_bot()
 
 		server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		host = socket.gethostname()
@@ -693,19 +752,35 @@ class Game:
 			player.kill()
 		self.p1 = None
 		self.p2 = None
+		self.p3 = None
+		self.p4 = None
 
 		for player in new_players:
 			player_id = player[0]
 			board_x, board_y = player[1], player[2]
 			treasures = player[3]
 
-			new_player = Player(player_id, board_x, board_y, self, self.allsprites, self.allplayers)
+			bot = False
+			if player_id in (const.P3, const.P4):
+				bot = True
+			new_player = Player(player_id, bot, board_x, board_y, self, self.allsprites, self.allplayers)
 			new_player.set_treasures(treasures)
 
 			if player_id == const.P1:
 				self.p1 = new_player
-			else:
+			elif player_id == const.P2:
 				self.p2 = new_player
+			elif player_id == const.P3:
+				self.p3 = new_player
+			elif player_id == const.P4:
+				self.p4 = new_player
+
+		self.acting_order = [self.p1, self.p2]
+
+		if self.p3:
+			self.acting_order.append(self.p3)
+		if self.p4:
+			self.acting_order.append(self.p4)
 
 		# The markers were erased when killing the tiles at the start of this function
 		self.add_markers_to_corner_tiles()
@@ -824,8 +899,8 @@ class Game:
 			tile.add_treasure(self.get_random_treasure())
 		
 	def create_players(self):
-		self.p1 = Player(const.P1, *const.PLAYER_STARTING_POSITIONS[const.P1], self, self.allsprites, self.allplayers)
-		self.p2 = Player(const.P2, *const.PLAYER_STARTING_POSITIONS[const.P2], self, self.allsprites, self.allplayers)
+		self.p1 = Player(const.P1, False, *const.PLAYER_STARTING_POSITIONS[const.P1], self, self.allsprites, self.allplayers)
+		self.p2 = Player(const.P2, False, *const.PLAYER_STARTING_POSITIONS[const.P2], self, self.allsprites, self.allplayers)
 
 		treasures = self.get_all_treasures()
 		random.shuffle(treasures)
@@ -833,13 +908,53 @@ class Game:
 		self.p1.set_treasures(treasures[:12])
 		self.p2.set_treasures(treasures[12:])
 
-		self.active_player = self.p1
+		self.acting_order = [self.p1, self.p2]
+		self.active_player = self.acting_order[0]
+
+	def add_bot(self):
+		if not self.p3:
+			self.p3 = Player(const.P3, True, *const.PLAYER_STARTING_POSITIONS[const.P3], self, self.allsprites, self.allplayers)
+			self.acting_order.append(self.p3)
+
+			treasures = self.get_all_treasures()
+			random.shuffle(treasures)
+
+			self.p1.set_treasures(treasures[:8])
+			self.p2.set_treasures(treasures[8:16])
+			self.p3.set_treasures(treasures[16:])
+
+			self.create_score_textboxes()
+
+		elif not self.p4:
+			self.p4 = Player(const.P4, True, *const.PLAYER_STARTING_POSITIONS[const.P4], self, self.allsprites, self.allplayers)
+			self.acting_order.append(self.p4)
+
+			treasures = self.get_all_treasures()
+			random.shuffle(treasures)
+
+			self.p1.set_treasures(treasures[:6])
+			self.p2.set_treasures(treasures[6:12])
+			self.p3.set_treasures(treasures[12:18])
+			self.p4.set_treasures(treasures[18:])
+
+			self.create_score_textboxes()
+
+		else:
+			print('Max number of players reached (4).')
 
 	def set_state(self, state):
 		self.state = state
 
 		if state == const.GAMEOVER_STATE:
-			winner = 'Player 1' if self.active_player == self.p1 else 'Player 2'
+			if self.active_player == self.p1:
+				winner = 'Player 1'
+			elif self.active_player == self.p2:
+				winner = 'Player 2'
+			elif self.active_player == self.p3:
+				winner = 'Player 3'
+			elif self.active_player == self.p4:
+				winner = 'Player 4'
+
 			for textbox in self.alltextboxes:
 				if textbox.textbox_type == const.TURN_REMINDER:
 					reminder_textbox = textbox
@@ -881,19 +996,37 @@ class Game:
 		TextBox('', const.FONT, self, const.TURN_REMINDER, self.allsprites, self.alltextboxes, top=top, left=left)
 
 	def create_score_textboxes(self):
+		textboxes_to_kill = []
+		for textbox in self.alltextboxes:
+			if textbox.textbox_type in (const.SCOREKEEPER_1, const.SCOREKEEPER_2, const.SCOREKEEPER_3, const.SCOREKEEPER_4):
+				textboxes_to_kill.append(textbox)
+		for textbox in textboxes_to_kill:
+			textbox.kill()
+
 		last_tile = self.find_tile_by_board_coord(6, 0)
-		left = last_tile.rect.left + const.TILESIZE * 2
+
+		left_1 = last_tile.rect.left + const.TILESIZE * 2
+		left_2 = left_1
+		left_3 = left_1 + 250
+		left_4 = left_3
 
 		top_1 = 600
 		top_2 = top_1 + 100
+		top_3 = top_1
+		top_4 = top_2
 
-		TextBox('score', const.FONT, self, const.SCOREKEEPER_1, self.allsprites, self.alltextboxes, top=top_1, left=left)
-		TextBox('score', const.FONT, self, const.SCOREKEEPER_2, self.allsprites, self.alltextboxes, top=top_2, left=left)
+		TextBox('score', const.FONT, self, const.SCOREKEEPER_1, self.allsprites, self.alltextboxes, top=top_1, left=left_2)
+		TextBox('score', const.FONT, self, const.SCOREKEEPER_2, self.allsprites, self.alltextboxes, top=top_2, left=left_2)
+
+		if self.p3:
+			TextBox('score', const.FONT, self, const.SCOREKEEPER_3, self.allsprites, self.alltextboxes, top=top_3, left=left_3)
+		if self.p4:
+			TextBox('score', const.FONT, self, const.SCOREKEEPER_4, self.allsprites, self.alltextboxes, top=top_4, left=left_4)
 
 	def setup(self):
 		for sprite in self.allsprites:
 			sprite.kill()
-		self.p1, self.p2 = None, None
+		self.p1, self.p2, self.p3, self.p4 = None, None, None, None
 		self.last_push = None
 
 		self.create_fixed_tiles()
@@ -1022,10 +1155,9 @@ class Game:
 
 		elif self.state == const.PLAYER_MOVING_STATE:
 			if self.active_player.signal == const.CONFIRM_MOVEMENT_SIGNAL:
-				if self.active_player == self.p1:
-					self.active_player = self.p2
-				else:
-					self.active_player = self.p1
+				# Cycles through the acting_order list
+				self.active_player = self.acting_order[(self.acting_order.index(self.active_player) + 1) % len(self.acting_order)]
+
 				self.set_state(const.TILE_MOVING_STATE)
 
 			elif self.active_player.signal == const.VICTORY_SIGNAL:
@@ -1046,7 +1178,8 @@ class Game:
 
 	def update(self):
 		if self.state != const.GAMEOVER_STATE:
-			self.allsprites.update(self.dt)
+			for sprite_group in self.update_order:
+				sprite_group.update(self.dt)
 			self.check_signals()
 			self.check_broadcasts()
 
@@ -1064,6 +1197,8 @@ class Game:
 			self.toggle_fullscreen()
 		elif key == pygame.K_d:
 			import pdb; pdb.set_trace()
+		elif key == pygame.K_a and not self.side:
+			self.add_bot()
 		elif key == pygame.K_r and not self.side:
 			self.setup()
 		elif key == pygame.K_s and not self.side:
