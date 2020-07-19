@@ -3,12 +3,204 @@
 import pygame
 import pygame.freetype
 pygame.init()
+pygame.mixer.init()
 
 import sys
 import random
 import socket
 import pickle
 import threading
+import os
+
+
+
+class Player(pygame.sprite.Sprite):
+	P1, P2, P3, P4 = 'P1', 'P2', 'P3', 'P4'
+	PLAYER_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/players/')
+	IMAGES =   {P1: pygame.image.load(PLAYER_IMAGE_PATH + 'p1.png'),
+				P2: pygame.image.load(PLAYER_IMAGE_PATH + 'p2.png')}
+
+	# Movement
+	RIGHT = 'RIGHT'
+	LEFT = 'LEFT'
+	UP = 'UP'
+	DOWN = 'DOWN'
+
+	# Signals
+	CONFIRM_MOVEMENT = 'CONFIRM_MOVEMENT'
+	VICTORY = 'VICTORY'
+
+	# Starting positions
+	STARTING_POSITIONS =   {P1: (0, 6),
+							P2: (6, 0),
+							P3: (6, 6),
+							P4: (0, 0)}
+
+	def __init__(self, player_id, board_x, board_y, game, *groups):
+		pygame.sprite.Sprite.__init__(self, *groups)
+
+		self.game = game
+
+		self.board_x, self.board_y = board_x, board_y
+		self.player_id = player_id
+
+		self.image = Player.IMAGES[self.player_id]
+		self.rect = self.image.get_rect(topleft=(Game.LEFTBOARDMARGIN + Tile.TILESIZE * self.board_x, Game.TOPBOARDMARGIN + Tile.TILESIZE * self.board_y))
+
+		self.tile = None
+		self.set_tile()
+		self.pushing = None
+
+		self.treasures = []
+		self.current_treasure_objective = None
+		self.homerun = False
+		
+		# Only create a card if a connection has been established
+		self.card = None
+		if self.game.side and self.game.side == self.player_id:
+			self.card = Card(self.game.allsprites, self.game.allcards)
+
+		self.intent = None
+		self.signal = None
+		self.broadcast = None
+
+	def set_treasures(self, treasures):
+		self.current_treasure_objective = None
+		self.treasures = treasures
+
+		if not treasures:
+			return
+		
+		self.current_treasure_objective = self.treasures[0]
+
+		if self.card and self.player_id == self.game.side:
+			self.card.add_treasure_image(self.current_treasure_objective)
+
+	def set_broadcast(self):
+		if self.intent:
+			self.broadcast = ('Player', self.player_id, self.intent)
+
+	def reset_broadcast(self):
+		self.broadcast = None
+
+	def process_keyboard_input(self, key):
+		if self.game.is_anything_pushing():
+			return
+
+		if key == pygame.K_RIGHT:
+			self.intent = Player.RIGHT
+		elif key == pygame.K_LEFT:
+			self.intent = Player.LEFT
+		elif key == pygame.K_UP:
+			self.intent = Player.UP
+		elif key == pygame.K_DOWN:
+			self.intent = Player.DOWN
+		elif key == pygame.K_RETURN:
+			self.intent = Player.CONFIRM_MOVEMENT
+
+		self.set_broadcast()
+
+	def move(self):
+		if (self.intent == Player.RIGHT and self.board_x < 6 and self.tile.right_open and
+			self.game.find_tile_by_board_coord(self.board_x + 1, self.board_y).left_open):
+				self.board_x += 1
+				self.set_tile()
+				self.rect.x += Tile.TILESIZE
+		elif (self.intent == Player.LEFT and self.board_x > 0 and self.tile.left_open and
+			self.game.find_tile_by_board_coord(self.board_x - 1, self.board_y).right_open):
+				self.board_x -= 1
+				self.set_tile()
+				self.rect.x -= Tile.TILESIZE
+		elif (self.intent == Player.UP and self.board_y > 0 and self.tile.top_open and
+			self.game.find_tile_by_board_coord(self.board_x, self.board_y - 1).bottom_open):
+				self.board_y -= 1
+				self.set_tile()
+				self.rect.y -= Tile.TILESIZE
+		elif (self.intent == Player.DOWN and self.board_y < 6 and self.tile.bottom_open and
+			self.game.find_tile_by_board_coord(self.board_x, self.board_y + 1).top_open):
+				self.board_y += 1
+				self.set_tile()
+				self.rect.y += Tile.TILESIZE
+
+	def start_homerun(self):
+		self.homerun = True
+		self.card.set_homerun(self.player_id)
+
+	def check_treasure_collision(self):
+		if self.current_treasure_objective == self.tile.treasure:
+			self.tile.remove_treasure()
+			self.treasures.pop(0)
+			self.game.TREASURE_CATCH_SOUND.play()
+
+			if not self.treasures:
+				self.start_homerun()
+			else:
+				self.current_treasure_objective = self.treasures[0]
+				if self.card:
+					self.card.add_treasure_image(self.current_treasure_objective)
+
+	def set_tile(self):
+		self.tile = self.game.find_tile_by_board_coord(self.board_x, self.board_y)
+
+	def confirm_movement(self):
+		self.signal = Player.CONFIRM_MOVEMENT
+		self.check_treasure_collision()
+
+	def check_victory(self):
+		if self.player_id == Player.P1 and (self.board_x, self.board_y) == (0, 6):
+			self.signal = Player.VICTORY
+		elif self.player_id == Player.P2 and (self.board_x, self.board_y) == (6, 0):
+			self.signal = Player.VICTORY
+
+	def keep_pushing(self):
+		step_x, step_y = 0, 0
+
+		if self.pushing[0]:
+			step_x = abs(self.pushing[0]) / self.pushing[0]
+			self.rect.x += step_x
+			self.pushing[0] -= step_x
+		if self.pushing[1]:
+			step_y = abs(self.pushing[1]) / self.pushing[1]
+			self.rect.y += step_y
+			self.pushing[1] -= step_y
+
+		if self.pushing == [0, 0]:
+			self.pushing = None
+			self.board_x += step_x
+			self.board_y += step_y
+
+			# Warp to other side
+			if self.board_y == -1:
+					self.board_y = 6
+					self.rect.y += 7 * Tile.TILESIZE
+			if self.board_y == 7:
+					self.board_y = 0
+					self.rect.y -= 7 * Tile.TILESIZE
+			if self.board_x == 7:
+				self.board_x = 0
+				self.rect.x -= 7 * Tile.TILESIZE
+			if self.board_x == -1:
+					self.board_x = 6
+					self.rect.x += 7 * Tile.TILESIZE
+
+	def update(self, dt):
+		self.signal = None
+
+		if self.intent in (Player.UP, Player.DOWN, Player.RIGHT, Player.LEFT):
+			self.move()
+		elif self.intent == Player.CONFIRM_MOVEMENT:
+			self.confirm_movement()
+
+			if self.homerun:
+				self.check_victory()
+
+		if self.pushing:
+			self.keep_pushing()
+
+		self.intent = None
+
+	def draw(self):
+		pass
 
 
 class Tile(pygame.sprite.Sprite):
@@ -67,44 +259,64 @@ class Tile(pygame.sprite.Sprite):
 	TREASURE_23 = 'TREASURE_23'
 	TREASURE_24 = 'TREASURE_24'
 
-	TILE_IMAGES =  {TOPRIGHT: pygame.image.load('assets/images/tiles/topright.png'),
-					BOTTOMRIGHT: pygame.image.load('assets/images/tiles/bottomright.png'),
-					BOTTOMLEFT: pygame.image.load('assets/images/tiles/bottomleft.png'),
-					TOPLEFT: pygame.image.load('assets/images/tiles/topleft.png'),
+	# Markers
+	# MARKER_P1 = 'MARKER_P1'
+	# MARKER_P2 = 'MARKER_P2'
+	# MARKER_P3 = 'MARKER_P3'
+	# MARKER_P4 = 'MARKER_P4'
 
-					TOPRIGHTLEFT: pygame.image.load('assets/images/tiles/toprightleft.png'),
-					TOPBOTTOMRIGHT: pygame.image.load('assets/images/tiles/topbottomright.png'),
-					BOTTOMRIGHTLEFT: pygame.image.load('assets/images/tiles/bottomrightleft.png'),
-					TOPBOTTOMLEFT: pygame.image.load('assets/images/tiles/topbottomleft.png'),
+	# Paths
+	TILE_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/tiles/')
+	TREASURE_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/treasures/')
+	MARKER_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/markers/')
 
-					TOPBOTTOM: pygame.image.load('assets/images/tiles/topbottom.png'),
-					RIGHTLEFT: pygame.image.load('assets/images/tiles/rightleft.png'),
+	# JOYSTICK_SELECTION_BACKGROUND_IMAGE = pygame.image.load(os.path.join(os.path.dirname(__file__), 'images/joystick_selection_background.png'))
+
+	TILE_IMAGES =  {TOPRIGHT: pygame.image.load(TILE_IMAGE_PATH + 'topright.png'),
+					BOTTOMRIGHT: pygame.image.load(TILE_IMAGE_PATH + 'bottomright.png'),
+					BOTTOMLEFT: pygame.image.load(TILE_IMAGE_PATH + 'bottomleft.png'),
+					TOPLEFT: pygame.image.load(TILE_IMAGE_PATH + 'topleft.png'),
+
+					TOPRIGHTLEFT: pygame.image.load(TILE_IMAGE_PATH + 'toprightleft.png'),
+					TOPBOTTOMRIGHT: pygame.image.load(TILE_IMAGE_PATH + 'topbottomright.png'),
+					BOTTOMRIGHTLEFT: pygame.image.load(TILE_IMAGE_PATH + 'bottomrightleft.png'),
+					TOPBOTTOMLEFT: pygame.image.load(TILE_IMAGE_PATH + 'topbottomleft.png'),
+
+					TOPBOTTOM: pygame.image.load(TILE_IMAGE_PATH + 'topbottom.png'),
+					RIGHTLEFT: pygame.image.load(TILE_IMAGE_PATH + 'rightleft.png'),
 					}
 
-	TREASURE_IMAGES =  {TREASURE_1: pygame.image.load('assets/images/treasures/treasure_1.png'),
-						TREASURE_2: pygame.image.load('assets/images/treasures/treasure_2.png'),
-						TREASURE_3: pygame.image.load('assets/images/treasures/treasure_3.png'),
-						TREASURE_4: pygame.image.load('assets/images/treasures/treasure_4.png'),
-						TREASURE_5: pygame.image.load('assets/images/treasures/treasure_5.png'),
-						TREASURE_6: pygame.image.load('assets/images/treasures/treasure_6.png'),
-						TREASURE_7: pygame.image.load('assets/images/treasures/treasure_7.png'),
-						TREASURE_8: pygame.image.load('assets/images/treasures/treasure_8.png'),
-						TREASURE_9: pygame.image.load('assets/images/treasures/treasure_9.png'),
-						TREASURE_10: pygame.image.load('assets/images/treasures/treasure_10.png'),
-						TREASURE_11: pygame.image.load('assets/images/treasures/treasure_11.png'),
-						TREASURE_12: pygame.image.load('assets/images/treasures/treasure_12.png'),
-						TREASURE_13: pygame.image.load('assets/images/treasures/treasure_13.png'),
-						TREASURE_14: pygame.image.load('assets/images/treasures/treasure_14.png'),
-						TREASURE_15: pygame.image.load('assets/images/treasures/treasure_15.png'),
-						TREASURE_16: pygame.image.load('assets/images/treasures/treasure_16.png'),
-						TREASURE_17: pygame.image.load('assets/images/treasures/treasure_17.png'),
-						TREASURE_18: pygame.image.load('assets/images/treasures/treasure_18.png'),
-						TREASURE_19: pygame.image.load('assets/images/treasures/treasure_19.png'),
-						TREASURE_20: pygame.image.load('assets/images/treasures/treasure_20.png'),
-						TREASURE_21: pygame.image.load('assets/images/treasures/treasure_21.png'),
-						TREASURE_22: pygame.image.load('assets/images/treasures/treasure_22.png'),
-						TREASURE_23: pygame.image.load('assets/images/treasures/treasure_23.png'),
-						TREASURE_24: pygame.image.load('assets/images/treasures/treasure_24.png')}
+	TREASURE_IMAGES =  {TREASURE_1: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_1.png'),
+						TREASURE_2: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_2.png'),
+						TREASURE_3: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_3.png'),
+						TREASURE_4: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_4.png'),
+						TREASURE_5: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_5.png'),
+						TREASURE_6: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_6.png'),
+						TREASURE_7: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_7.png'),
+						TREASURE_8: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_8.png'),
+						TREASURE_9: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_9.png'),
+						TREASURE_10: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_10.png'),
+						TREASURE_11: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_11.png'),
+						TREASURE_12: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_12.png'),
+						TREASURE_13: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_13.png'),
+						TREASURE_14: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_14.png'),
+						TREASURE_15: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_15.png'),
+						TREASURE_16: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_16.png'),
+						TREASURE_17: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_17.png'),
+						TREASURE_18: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_18.png'),
+						TREASURE_19: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_19.png'),
+						TREASURE_20: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_20.png'),
+						TREASURE_21: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_21.png'),
+						TREASURE_22: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_22.png'),
+						TREASURE_23: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_23.png'),
+						TREASURE_24: pygame.image.load(TREASURE_IMAGE_PATH + 'treasure_24.png')
+						}
+
+	MARKER_IMAGES =    {Player.P1: pygame.image.load(MARKER_IMAGE_PATH + 'marker_p1.png'),
+						Player.P2: pygame.image.load(MARKER_IMAGE_PATH + 'marker_p2.png'),
+						Player.P3: pygame.image.load(MARKER_IMAGE_PATH + 'marker_p3.png'),
+						Player.P4: pygame.image.load(MARKER_IMAGE_PATH + 'marker_p4.png')
+						}
 
 	def __init__(self, rect_x, rect_y, board_x, board_y, tiletype, *groups):
 		pygame.sprite.Sprite.__init__(self, *groups)
@@ -117,6 +329,7 @@ class Tile(pygame.sprite.Sprite):
 		self.rect = self.image.get_rect(topleft=(rect_x, rect_y))
 
 		self.board_x, self.board_y = board_x, board_y
+		self.pushing = None
 
 		self.right_open = False
 		self.left_open = False
@@ -126,8 +339,11 @@ class Tile(pygame.sprite.Sprite):
 
 		self.intent = None
 		self.signal = None
-
 		self.broadcast = None
+
+	def add_marker(self, player_id):
+		self.image = self.image.copy()
+		self.image.blit(Tile.MARKER_IMAGES[player_id], (0, 0))
 
 	def add_treasure(self, treasure):
 		if not treasure:
@@ -188,6 +404,22 @@ class Tile(pygame.sprite.Sprite):
 
 	def push(self):
 		self.signal = Tile.PUSH
+
+	def keep_pushing(self):
+		step_x, step_y = 0, 0
+		if self.pushing[0]:
+			step_x = abs(self.pushing[0]) / self.pushing[0]
+			self.rect.x += step_x
+			self.pushing[0] -= step_x
+		if self.pushing[1]:
+			step_y = abs(self.pushing[1]) / self.pushing[1]
+			self.rect.y += step_y
+			self.pushing[1] -= step_y
+
+		if self.pushing == [0, 0]:
+			self.pushing = None
+			self.board_x += step_x
+			self.board_y += step_y
 
 	def move(self):
 		# Move
@@ -271,6 +503,9 @@ class Tile(pygame.sprite.Sprite):
 		elif self.intent == Tile.PUSH:
 			self.push()
 
+		if self.pushing:
+			self.keep_pushing()
+
 		self.intent = None
 
 	def draw(self):
@@ -278,7 +513,8 @@ class Tile(pygame.sprite.Sprite):
 
 
 class Card(pygame.sprite.Sprite):
-	EMPTY_CARD_PATH = 'assets/images/cards/empty_card.png'
+	EMPTY_CARD_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/cards/')
+	EMPTY_CARD = EMPTY_CARD_PATH + 'empty_card.png'
 	TOP = Tile.TILESIZE * 2
 	LEFT = 850
 
@@ -289,7 +525,7 @@ class Card(pygame.sprite.Sprite):
 		self.reload_image()
 
 	def reload_image(self):
-		self.image = pygame.image.load(Card.EMPTY_CARD_PATH)
+		self.image = pygame.image.load(Card.EMPTY_CARD)
 		self.rect = self.image.get_rect(topleft=(Card.LEFT, Card.TOP))
 		
 	def add_treasure_image(self, treasure):
@@ -297,155 +533,14 @@ class Card(pygame.sprite.Sprite):
 		self.reload_image()
 		left = self.rect.width // 2 - Tile.TILESIZE // 2
 		top = self.rect.height // 2 - Tile.TILESIZE // 2
-		self.image.blit(treasure_image, (left, top))		
+		self.image.blit(treasure_image, (left, top))
 
-	def update(self, dt):
-		pass
-
-	def draw(self):
-		pass
-
-
-class Player(pygame.sprite.Sprite):
-	P1, P2 = 'P1', 'P2'
-	IMAGES =   {P1: pygame.image.load('assets/images/players/p1.png'),
-				P2: pygame.image.load('assets/images/players/p2.png')}
-
-	# Movement
-	RIGHT = 'RIGHT'
-	LEFT = 'LEFT'
-	UP = 'UP'
-	DOWN = 'DOWN'
-
-	# Signals
-	CONFIRM_MOVEMENT = 'CONFIRM_MOVEMENT'
-	VICTORY = 'VICTORY'
-
-	def __init__(self, player_id, board_x, board_y, game, *groups):
-		pygame.sprite.Sprite.__init__(self, *groups)
-
-		self.game = game
-
-		self.board_x, self.board_y = board_x, board_y
-		self.player_id = player_id
-
-		self.image = Player.IMAGES[self.player_id]
-		self.rect = self.image.get_rect(topleft=(Game.LEFTBOARDMARGIN + Tile.TILESIZE * self.board_x, Game.TOPBOARDMARGIN + Tile.TILESIZE * self.board_y))
-
-		self.tile = None
-		self.set_tile()
-
-		self.treasures = []
-		self.current_treasure_objective = None
-		self.homerun = False
-		
-		# Only create a card if a connection has been established
-		self.card = None
-		if self.game.side and self.game.side == self.player_id:
-			self.card = Card(self.game.allsprites, self.game.allcards)
-
-		self.intent = None
-		self.signal = None
-		self.broadcast = None
-
-	def set_treasures(self, treasures):
-		self.current_treasure_objective = None
-		self.treasures = treasures
-
-		if not treasures:
-			return
-		
-		self.current_treasure_objective = self.treasures[0]
-
-		if self.card and self.player_id == self.game.side:
-			self.card.add_treasure_image(self.current_treasure_objective)
-
-	def set_broadcast(self):
-		if self.intent:
-			self.broadcast = ('Player', self.player_id, self.intent)
-
-	def reset_broadcast(self):
-		self.broadcast = None
-
-	def process_keyboard_input(self, key):
-		if key == pygame.K_RIGHT:
-			self.intent = Player.RIGHT
-		elif key == pygame.K_LEFT:
-			self.intent = Player.LEFT
-		elif key == pygame.K_UP:
-			self.intent = Player.UP
-		elif key == pygame.K_DOWN:
-			self.intent = Player.DOWN
-		elif key == pygame.K_RETURN:
-			self.intent = Player.CONFIRM_MOVEMENT
-
-		self.set_broadcast()
-
-	def move(self):
-		if (self.intent == Player.RIGHT and self.board_x < 6 and self.tile.right_open and
-			self.game.find_tile_by_board_coord(self.board_x + 1, self.board_y).left_open):
-				self.board_x += 1
-				self.set_tile()
-				self.rect.x += Tile.TILESIZE
-		elif (self.intent == Player.LEFT and self.board_x > 0 and self.tile.left_open and
-			self.game.find_tile_by_board_coord(self.board_x - 1, self.board_y).right_open):
-				self.board_x -= 1
-				self.set_tile()
-				self.rect.x -= Tile.TILESIZE
-		elif (self.intent == Player.UP and self.board_y > 0 and self.tile.top_open and
-			self.game.find_tile_by_board_coord(self.board_x, self.board_y - 1).bottom_open):
-				self.board_y -= 1
-				self.set_tile()
-				self.rect.y -= Tile.TILESIZE
-		elif (self.intent == Player.DOWN and self.board_y < 6 and self.tile.bottom_open and
-			self.game.find_tile_by_board_coord(self.board_x, self.board_y + 1).top_open):
-				self.board_y += 1
-				self.set_tile()
-				self.rect.y += Tile.TILESIZE
-
-	def start_homerun(self):
-		self.homerun = True
-
-	def check_treasure_collision(self):
-		if self.current_treasure_objective == self.tile.treasure:
-			self.tile.remove_treasure()
-			self.treasures.pop(0)
-
-			if not self.treasures:
-				self.start_homerun()
-			else:
-				self.current_treasure_objective = self.treasures[0]
-				if self.card:
-					self.card.add_treasure_image(self.current_treasure_objective)
-
-	def set_tile(self):
-		self.tile = self.game.find_tile_by_board_coord(self.board_x, self.board_y)
-
-	def confirm_movement(self):
-		self.signal = Player.CONFIRM_MOVEMENT
-		self.check_treasure_collision()
-
-	def check_victory(self):
-		if self.player_id == Player.P1 and (self.board_x, self.board_y) == (0, 6):
-			self.signal = Player.VICTORY
-		elif self.player_id == Player.P2 and (self.board_x, self.board_y) == (6, 0):
-			self.signal = Player.VICTORY
-
-	def update(self, dt):
-		self.signal = None
-
-		if self.intent in (Player.UP, Player.DOWN, Player.RIGHT, Player.LEFT):
-			self.move()
-		elif self.intent == Player.CONFIRM_MOVEMENT:
-			self.confirm_movement()
-
-			if self.homerun:
-				self.check_victory()
-
-		self.intent = None
-
-	def draw(self):
-		pass
+	def set_homerun(self, player_id):
+		marker_image = Tile.MARKER_IMAGES[player_id]
+		self.reload_image()
+		left = self.rect.width // 2 - Tile.TILESIZE // 2
+		top = self.rect.height // 2 - Tile.TILESIZE // 2
+		self.image.blit(marker_image, (left, top))
 
 
 class ListenerThread(threading.Thread):
@@ -482,16 +577,18 @@ class ListenerThread(threading.Thread):
 
 
 class Arrow(pygame.sprite.Sprite):
-	NORMAL_IMAGES =    {Tile.UP: pygame.image.load('assets/images/arrows/arrow_up.png'),
-						Tile.RIGHT: pygame.image.load('assets/images/arrows/arrow_right.png'),
-						Tile.DOWN: pygame.image.load('assets/images/arrows/arrow_down.png'),
-						Tile.LEFT: pygame.image.load('assets/images/arrows/arrow_left.png')
+	ARROW_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/arrows/')
+
+	NORMAL_IMAGES =    {Tile.UP: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_up.png'),
+						Tile.RIGHT: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_right.png'),
+						Tile.DOWN: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_down.png'),
+						Tile.LEFT: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_left.png')
 						}
 
-	BLOCKED_IMAGES =   {Tile.UP: pygame.image.load('assets/images/arrows/arrow_up_blocked.png'),
-						Tile.RIGHT: pygame.image.load('assets/images/arrows/arrow_right_blocked.png'),
-						Tile.DOWN: pygame.image.load('assets/images/arrows/arrow_down_blocked.png'),
-						Tile.LEFT: pygame.image.load('assets/images/arrows/arrow_left_blocked.png')
+	BLOCKED_IMAGES =   {Tile.UP: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_up_blocked.png'),
+						Tile.RIGHT: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_right_blocked.png'),
+						Tile.DOWN: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_down_blocked.png'),
+						Tile.LEFT: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_left_blocked.png')
 						}
 
 
@@ -515,7 +612,7 @@ class Arrow(pygame.sprite.Sprite):
 
 
 class TextBox(pygame.sprite.Sprite):
-	FONT_PATH = 'assets/fff_font.ttf'
+	FONT_PATH = os.path.join(os.path.dirname(__file__), 'assets/fonts/fff_font.ttf')
 	BIG_FONT_SIZE = 100
 	SMALL_FONT_SIZE = 25
 	FONT_COLOR = (255, 0, 0)
@@ -615,12 +712,22 @@ class Game:
 	PLAYER_MOVING_STATE = 'PLAYER_MOVING_STATE'
 	GAMEOVER_STATE = 'GAMEOVER_STATE'
 
+	# Sounds
+	SOUND_PATH = os.path.join(os.path.dirname(__file__), 'assets/sounds/')
+	MOVING_WALL_SOUND = pygame.mixer.Sound(SOUND_PATH + 'moving_wall.wav')
+	TREASURE_CATCH_SOUND = pygame.mixer.Sound(SOUND_PATH + 'treasure_catch.wav')
+	ILLEGAL_PUSH_SOUND = pygame.mixer.Sound(SOUND_PATH + 'illegal_push.wav')
+
+	# Background image
+	BACKGROUND_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/backgrounds/')
+
 	def __init__(self):
 		# self.screen = pygame.display.set_mode((Game.SCRENWIDTH, Game.SCREEHEIGHT), pygame.FULLSCREEN)
 		self.screen = pygame.display.set_mode((Game.SCRENWIDTH, Game.SCREEHEIGHT))
 		self.clock = pygame.time.Clock()
 		self.dt = 0
 		self.fullscreen = False
+		self.background_image = pygame.image.load(Game.BACKGROUND_IMAGE_PATH + 'background.png')
 
 		self.allsprites = pygame.sprite.Group()
 		self.alltiles = pygame.sprite.Group()
@@ -702,9 +809,7 @@ class Game:
 		self.client_socket.send(pickle.dumps(players_to_send))
 
 		# Reload treasures on P1 (server player) to populate the card
-		print('server, cards: ', self.allcards)
 		self.p1.set_treasures(self.p1.treasures)
-		print('server, cards: ', self.allcards)
 
 		ListenerThread(self, self.client_socket).start()
 	
@@ -779,6 +884,9 @@ class Game:
 			else:
 				self.p2 = new_player
 
+		# The markers were erased when killing the tiles at the start of this function
+		self.add_markers_to_corner_tiles()
+
 		self.active_player = self.p1
 
 		print('Synchronization successful.')
@@ -846,6 +954,14 @@ class Game:
 		for tile in tiles_that_need_treasure:
 			tile.add_treasure(self.get_random_treasure())
 
+		self.add_markers_to_corner_tiles()
+		
+	def add_markers_to_corner_tiles(self):
+		self.find_tile_by_board_coord(*Player.STARTING_POSITIONS[Player.P1]).add_marker(Player.P1)
+		self.find_tile_by_board_coord(*Player.STARTING_POSITIONS[Player.P2]).add_marker(Player.P2)
+		self.find_tile_by_board_coord(*Player.STARTING_POSITIONS[Player.P3]).add_marker(Player.P3)
+		self.find_tile_by_board_coord(*Player.STARTING_POSITIONS[Player.P4]).add_marker(Player.P4)
+
 	def create_moving_tiles(self):
 		# TOPBOTTOM tiles never have treasures
 		# TOPRIGHTLEFT tiles always have treasures
@@ -885,8 +1001,8 @@ class Game:
 			tile.add_treasure(self.get_random_treasure())
 		
 	def create_players(self):
-		self.p1 = Player(Player.P1, 0, 6, self, self.allsprites, self.allplayers)
-		self.p2 = Player(Player.P2, 6, 0, self, self.allsprites, self.allplayers)
+		self.p1 = Player(Player.P1, *Player.STARTING_POSITIONS[Player.P1], self, self.allsprites, self.allplayers)
+		self.p2 = Player(Player.P2, *Player.STARTING_POSITIONS[Player.P2], self, self.allsprites, self.allplayers)
 
 		treasures = self.get_all_treasures()
 		random.shuffle(treasures)
@@ -906,9 +1022,6 @@ class Game:
 					reminder_textbox = textbox
 
 			reminder_textbox.change_text(winner + ' won!!!')
-
-
-
 
 	def create_arrows(self):
 		topleft_tile = self.find_tile_by_board_coord(0, 0)
@@ -996,8 +1109,19 @@ class Game:
 				return arrow
 		return None
 
+	def is_anything_pushing(self):
+		for tile in self.alltiles:
+			if tile.pushing:
+				return True
+		return False
+
 	def set_last_push(self):
-		self.last_push = self.moving_tile.board_x, self.moving_tile.board_y
+		# Last push will be the final position of the current moving (pushing) tile
+		self.last_push = [self.moving_tile.board_x, self.moving_tile.board_y]
+		if self.moving_tile.pushing[0]:
+			self.last_push[0] += abs(self.moving_tile.pushing[0]) / self.moving_tile.pushing[0]
+		if self.moving_tile.pushing[1]:
+			self.last_push[1] += abs(self.moving_tile.pushing[1]) / self.moving_tile.pushing[1]
 
 		for arrow in self.allarrows:
 			if arrow.blocked:
@@ -1009,9 +1133,9 @@ class Game:
 
 	def push_tiles(self):
 		if not self.is_push_legal():
+			Game.ILLEGAL_PUSH_SOUND.play()
 			return
 
-		# self.set_last_push()
 		tiles_to_push = [self.moving_tile]
 
 		# Down -> up
@@ -1021,14 +1145,10 @@ class Game:
 			players_to_push = self.get_players_to_push(tiles_to_push)
 
 			for tile in tiles_to_push:
-				tile.board_y -= 1
-				tile.rect.y -= Tile.TILESIZE
+				tile.pushing = [0, -Tile.TILESIZE]
+
 			for player in players_to_push:
-				player.board_y -= 1
-				player.rect.y -= Tile.TILESIZE
-				if player.board_y == -1:
-					player.board_y = 6
-					player.rect.y += 7 * Tile.TILESIZE
+				player.pushing = [0, -Tile.TILESIZE]				
 
 		# Up -> down
 		elif self.moving_tile.board_y == -1:
@@ -1037,14 +1157,10 @@ class Game:
 			players_to_push = self.get_players_to_push(tiles_to_push)
 
 			for tile in tiles_to_push:
-				tile.board_y += 1
-				tile.rect.y += Tile.TILESIZE
+				tile.pushing = [0, Tile.TILESIZE]
+
 			for player in players_to_push:
-				player.board_y += 1
-				player.rect.y += Tile.TILESIZE
-				if player.board_y == 7:
-					player.board_y = 0
-					player.rect.y -= 7 * Tile.TILESIZE
+				player.pushing = [0, Tile.TILESIZE]				
 
 		# Left -> right
 		elif self.moving_tile.board_x == -1:
@@ -1053,14 +1169,10 @@ class Game:
 			players_to_push = self.get_players_to_push(tiles_to_push)
 
 			for tile in tiles_to_push:
-				tile.board_x += 1
-				tile.rect.x += Tile.TILESIZE
+				tile.pushing = [Tile.TILESIZE, 0]
+				
 			for player in players_to_push:
-				player.board_x += 1
-				player.rect.x += Tile.TILESIZE
-				if player.board_x == 7:
-					player.board_x = 0
-					player.rect.x -= 7 * Tile.TILESIZE
+				player.pushing = [Tile.TILESIZE, 0]
 
 		# Right -> left
 		elif self.moving_tile.board_x == 7:
@@ -1069,19 +1181,16 @@ class Game:
 			players_to_push = self.get_players_to_push(tiles_to_push)
 
 			for tile in tiles_to_push:
-				tile.board_x -= 1
-				tile.rect.x -= Tile.TILESIZE
+				tile.pushing = [-Tile.TILESIZE, 0]
+
 			for player in players_to_push:
-				player.board_x -= 1
-				player.rect.x -= Tile.TILESIZE
-				if player.board_x == -1:
-					player.board_x = 6
-					player.rect.x += 7 * Tile.TILESIZE
+				player.pushing = [-Tile.TILESIZE, 0]
 
 		self.moving_tile = tiles_to_push[-1]
 		self.set_state(Game.PLAYER_MOVING_STATE)
 
 		self.set_last_push()
+		Game.MOVING_WALL_SOUND.play()
 
 	def check_signals(self):
 		if self.state == Game.TILE_MOVING_STATE:
@@ -1119,7 +1228,7 @@ class Game:
 			self.check_broadcasts()
 
 	def draw(self):
-		self.screen.fill((0, 30, 130))
+		self.screen.blit(self.background_image, (0, 0))
 
 		for sprite_group in self.print_order:
 			sprite_group.draw(self.screen)
