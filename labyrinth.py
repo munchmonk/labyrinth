@@ -12,6 +12,7 @@ import pickle
 import threading
 import os
 
+import const
 
 
 class Player(pygame.sprite.Sprite):
@@ -156,32 +157,38 @@ class Player(pygame.sprite.Sprite):
 		step_x, step_y = 0, 0
 
 		if self.pushing[0]:
-			step_x = abs(self.pushing[0]) / self.pushing[0]
+			step_x = abs(self.pushing[0]) / self.pushing[0] * Game.PUSHING_SPEED
 			self.rect.x += step_x
 			self.pushing[0] -= step_x
 		if self.pushing[1]:
-			step_y = abs(self.pushing[1]) / self.pushing[1]
+			step_y = abs(self.pushing[1]) / self.pushing[1] * Game.PUSHING_SPEED
 			self.rect.y += step_y
 			self.pushing[1] -= step_y
 
 		if self.pushing == [0, 0]:
 			self.pushing = None
-			self.board_x += step_x
-			self.board_y += step_y
+			if step_x:
+				self.board_x += abs(step_x) / step_x
+			if step_y:
+				self.board_y += abs(step_y) / step_y
 
 			# Warp to other side
 			if self.board_y == -1:
 					self.board_y = 6
 					self.rect.y += 7 * Tile.TILESIZE
+					self.set_tile()
 			if self.board_y == 7:
 					self.board_y = 0
 					self.rect.y -= 7 * Tile.TILESIZE
+					self.set_tile()
 			if self.board_x == 7:
 				self.board_x = 0
 				self.rect.x -= 7 * Tile.TILESIZE
+				self.set_tile()
 			if self.board_x == -1:
 					self.board_x = 6
 					self.rect.x += 7 * Tile.TILESIZE
+					self.set_tile()
 
 	def update(self, dt):
 		self.signal = None
@@ -259,18 +266,10 @@ class Tile(pygame.sprite.Sprite):
 	TREASURE_23 = 'TREASURE_23'
 	TREASURE_24 = 'TREASURE_24'
 
-	# Markers
-	# MARKER_P1 = 'MARKER_P1'
-	# MARKER_P2 = 'MARKER_P2'
-	# MARKER_P3 = 'MARKER_P3'
-	# MARKER_P4 = 'MARKER_P4'
-
 	# Paths
 	TILE_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/tiles/')
 	TREASURE_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/treasures/')
 	MARKER_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/markers/')
-
-	# JOYSTICK_SELECTION_BACKGROUND_IMAGE = pygame.image.load(os.path.join(os.path.dirname(__file__), 'images/joystick_selection_background.png'))
 
 	TILE_IMAGES =  {TOPRIGHT: pygame.image.load(TILE_IMAGE_PATH + 'topright.png'),
 					BOTTOMRIGHT: pygame.image.load(TILE_IMAGE_PATH + 'bottomright.png'),
@@ -408,18 +407,20 @@ class Tile(pygame.sprite.Sprite):
 	def keep_pushing(self):
 		step_x, step_y = 0, 0
 		if self.pushing[0]:
-			step_x = abs(self.pushing[0]) / self.pushing[0]
+			step_x = abs(self.pushing[0]) / self.pushing[0] * Game.PUSHING_SPEED
 			self.rect.x += step_x
 			self.pushing[0] -= step_x
 		if self.pushing[1]:
-			step_y = abs(self.pushing[1]) / self.pushing[1]
+			step_y = abs(self.pushing[1]) / self.pushing[1] * Game.PUSHING_SPEED
 			self.rect.y += step_y
 			self.pushing[1] -= step_y
 
 		if self.pushing == [0, 0]:
 			self.pushing = None
-			self.board_x += step_x
-			self.board_y += step_y
+			if step_x:
+				self.board_x += abs(step_x) / step_x
+			if step_y:
+				self.board_y += abs(step_y) / step_y
 
 	def move(self):
 		# Move
@@ -436,7 +437,7 @@ class Tile(pygame.sprite.Sprite):
 			self.board_y += 2
 			self.rect.y += 2 * Tile.TILESIZE
 
-		# Check if moved beyond board edges
+		# Check if moved beyond board edges - snap to board
 		if (self.board_x, self.board_y) == (-1, -1):
 			if self.intent == Tile.UP:
 				self.board_x += 2
@@ -704,6 +705,7 @@ class Game:
 	SCREEHEIGHT = 768
 	LEFTBOARDMARGIN = Tile.TILESIZE
 	TOPBOARDMARGIN = Tile.TILESIZE
+	PUSHING_SPEED = 2
 
 	TOT_TREASURES = 24
 
@@ -1240,12 +1242,14 @@ class Game:
 			self.quit()
 		elif key == pygame.K_w:
 			self.toggle_fullscreen()
+		elif key == pygame.K_d:
+			import pdb; pdb.set_trace()
 		elif key == pygame.K_r and not self.side:
 			self.setup()
 		elif key == pygame.K_s and not self.side:
 			self.start_server()
 		elif key == pygame.K_c and not self.side:
-			self.start_client()
+				self.start_client()
 		
 		if self.state == Game.TILE_MOVING_STATE:
 			if key in (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE, pygame.K_RETURN):
