@@ -332,14 +332,14 @@ class Player(pygame.sprite.Sprite):
 		# If the above aren't reachable, try the centre
 		priority_list += ((3, 3), (3, 2), (4, 3), (3, 4), (2, 3), (2, 2), (4, 2), (4, 4), (2, 4))
 
-		for tile_coord in priority_list:
-			if self.game.find_tile_by_board_coord(*tile_coord) in reachable_tiles:
-				return self.game.find_tile_by_board_coord(*tile_coord)
-
 		# If nothing else, try for a tile with three openings
 		for tile in reachable_tiles:
 			if tile.tiletype in (const.TOPRIGHTLEFT, const.TOPBOTTOMRIGHT, const.BOTTOMRIGHTLEFT, const.TOPBOTTOMLEFT):
-				return tile
+				priority_list.append((tile.board_x, tile.board_y))
+
+		for tile_coord in priority_list:
+			if self.game.find_tile_by_board_coord(*tile_coord) in reachable_tiles:
+				return self.game.find_tile_by_board_coord(*tile_coord)
 
 		# Nothing found - return a random tile
 		return random.choice(reachable_tiles)
@@ -1068,16 +1068,6 @@ class Game:
 	def create_players(self):
 		self.p1 = Player(const.P1, False, *const.PLAYER_STARTING_POSITIONS[const.P1], self, self.allsprites, self.allplayers)
 		self.p2 = Player(const.P2, False, *const.PLAYER_STARTING_POSITIONS[const.P2], self, self.allsprites, self.allplayers)
-
-
-
-
-
-		self.p1.bot, self.p2.bot = True, True
-
-
-
-
 
 		treasures = self.get_all_treasures()
 		random.shuffle(treasures)
