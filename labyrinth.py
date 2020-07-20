@@ -172,6 +172,74 @@ class Player(pygame.sprite.Sprite):
 					self.rect.x += 7 * const.TILESIZE
 					self.set_tile()
 
+	def find_reachable_tiles(self):
+		reachable_tiles = []
+		candidates = [self.tile]
+
+		while candidates:
+			curr_candidate = candidates.pop()
+			if curr_candidate not in reachable_tiles:
+				reachable_tiles.append(curr_candidate)
+
+			for neighbour in self.find_neighbours(curr_candidate):
+				if neighbour not in reachable_tiles:
+					reachable_tiles.append(neighbour)
+					candidates.append(neighbour)
+
+		return reachable_tiles
+
+	def find_neighbours(self, tile):
+		neighbours = []
+		left_neighbour = self.game.find_tile_by_board_coord(tile.board_x - 1, tile.board_y)
+		right_neighbour = self.game.find_tile_by_board_coord(tile.board_x + 1, tile.board_y)
+		top_neighbour = self.game.find_tile_by_board_coord(tile.board_x, tile.board_y - 1)
+		bottom_neighbour = self.game.find_tile_by_board_coord(tile.board_x, tile.board_y + 1)
+
+		if left_neighbour and tile.left_open and left_neighbour.right_open:
+			neighbours.append(left_neighbour)
+		if right_neighbour and tile.right_open and right_neighbour.left_open:
+			neighbours.append(right_neighbour)
+		if top_neighbour and tile.top_open and top_neighbour.bottom_open:
+			neighbours.append(top_neighbour)
+		if bottom_neighbour and tile.bottom_open and bottom_neighbour.top_open:
+			neighbours.append(bottom_neighbour)
+
+		return neighbours
+
+	def find_path_to_tile(self, target_tile):
+		reachable_tiles = self.find_reachable_tiles()
+		if target_tile not in reachable_tiles:
+			return None
+
+		path_to_tile = [self.tile]
+		visited = [self.tile]
+		curr_tile = path_to_tile[-1]
+
+		while curr_tile != target_tile:
+			neighbours = self.find_neighbours(curr_tile)
+			choice = None
+
+			for neighbour in neighbours:
+				if neighbour in reachable_tiles and neighbour not in visited:
+					choice = neighbour
+					break
+
+			if choice:
+				curr_tile = choice
+				path_to_tile.append(curr_tile)
+				visited.append(curr_tile)
+			else:
+				path_to_tile.pop()
+				curr_tile = path_to_tile[-1]
+
+		return path_to_tile		
+
+	def find_tile_containing_treasure(self, treasure):
+		for tile in self.game.alltiles:
+			if tile.treasure == treasure:
+				return tile
+		return None
+
 	def get_bot_tile_move(self):
 		if not self.attempts:
 			self.attempts.append(random.choice((pygame.K_UP, pygame.K_DOWN, pygame.K_RIGHT, pygame.K_LEFT)))
@@ -200,6 +268,25 @@ class Player(pygame.sprite.Sprite):
 			self.get_bot_player_move()
 
 	def update(self, dt):
+
+
+
+
+		
+		tile_with_treasure = self.find_tile_containing_treasure(self.current_treasure_objective)
+		path_to_treasure = self.find_path_to_tile(tile_with_treasure)
+
+		if path_to_treasure:
+			print('----------')
+			print(self.player_id, tile_with_treasure.board_x, tile_with_treasure.board_y)
+			for i in range(len(path_to_treasure)):
+				print(i + 1, ' -> ', path_to_treasure[i].board_x, path_to_treasure[i].board_y)
+
+
+
+
+
+
 		self.signal = None
 
 		if self.bot and self.game.active_player == self:
