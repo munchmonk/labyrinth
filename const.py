@@ -86,6 +86,9 @@ SCREENHEIGHT = 768
 LEFTBOARDMARGIN = TILESIZE
 TOPBOARDMARGIN = TILESIZE
 
+#	- bots
+BOT_INPUT_COOLDOWN = 0.0005
+
 #	- misc
 FPS = 30
 TOT_TREASURES = 24
@@ -182,6 +185,7 @@ FONT = pygame.freetype.Font(FONT_PATH, FONT_SIZE)
 MOVING_WALL_SOUND = pygame.mixer.Sound(SOUND_PATH + 'moving_wall.wav')
 TREASURE_CATCH_SOUND = pygame.mixer.Sound(SOUND_PATH + 'treasure_catch.wav')
 ILLEGAL_PUSH_SOUND = pygame.mixer.Sound(SOUND_PATH + 'illegal_push.wav')
+VICTORY_SOUND = pygame.mixer.Sound(SOUND_PATH + 'victory.wav')
 
 
 # ---------------------------------------------------

@@ -11,6 +11,7 @@ import socket
 import pickle
 import threading
 import os
+import time
 
 import const
 
@@ -25,7 +26,8 @@ class Player(pygame.sprite.Sprite):
 		self.player_id = player_id
 
 		self.bot = bot
-		self.attempts = []
+		self.path_to_target_tile = []
+		self.last_bot_input = 0
 
 		self.image = const.PLAYER_IMAGES[self.player_id]
 		self.rect = self.image.get_rect(topleft=(const.LEFTBOARDMARGIN + const.TILESIZE * self.board_x, const.TOPBOARDMARGIN + const.TILESIZE * self.board_y))
@@ -107,7 +109,9 @@ class Player(pygame.sprite.Sprite):
 
 	def start_homerun(self):
 		self.homerun = True
-		self.card.set_homerun(self.player_id)
+
+		if self.card:
+			self.card.set_homerun(self.player_id)
 
 	def check_treasure_collision(self):
 		if self.current_treasure_objective == self.tile.treasure:
@@ -241,26 +245,120 @@ class Player(pygame.sprite.Sprite):
 		return None
 
 	def get_bot_tile_move(self):
-		if not self.attempts:
-			self.attempts.append(random.choice((pygame.K_UP, pygame.K_DOWN, pygame.K_RIGHT, pygame.K_LEFT)))
-			self.game.moving_tile.process_keyboard_input(self.attempts[0])
+		# Give RETURN a higher chance
+		choice = random.choice((pygame.K_UP, pygame.K_DOWN, pygame.K_RIGHT, pygame.K_LEFT, pygame.K_SPACE, pygame.K_RETURN, pygame.K_RETURN, pygame.K_RETURN))
+		self.game.moving_tile.process_keyboard_input(choice)
+		self.last_bot_input = time.time()
+
+	def transform_path_into_input(self, tile_path):
+		if not tile_path:
+			return None
+
+		if len(tile_path) == 1:
+			return [pygame.K_RETURN]
+
+		input_list = []
+		for i in range(len(tile_path) - 1):
+			curr_tile = tile_path[i]
+			next_tile = tile_path[i+1]
+
+			if next_tile.board_x > curr_tile.board_x:
+				input_list.append(pygame.K_RIGHT)
+			elif next_tile.board_x < curr_tile.board_x:
+				input_list.append(pygame.K_LEFT)
+			elif next_tile.board_y > curr_tile.board_y:
+				input_list.append(pygame.K_DOWN)
+			elif next_tile.board_y < curr_tile.board_y:
+				input_list.append(pygame.K_UP)
+
+		return input_list
+
+	def get_target_tile(self):
+		reachable_tiles = self.find_reachable_tiles()
+
+		if len(reachable_tiles) == 1:
+			return self.tile
+
+		target_tile = None
+
+		# Straightforward choice
+		if self.homerun:
+			target_tile = self.game.find_tile_by_board_coord(*const.PLAYER_STARTING_POSITIONS[self.player_id])
 		else:
-	 		self.attempts = []
-	 		self.game.moving_tile.process_keyboard_input(pygame.K_RETURN)
+			target_tile = self.find_tile_containing_treasure(self.current_treasure_objective)
+
+		if target_tile in reachable_tiles:
+			return target_tile
+
+		# Start heuristics
+		target_x, target_y = target_tile.board_x, target_tile.board_y
+		priority_list = []
+
+		# Homerun
+		if self.homerun:
+			# P1
+			if (target_x, target_y) == (0, 6):
+				priority_list += ((1, 5), (1, 4), (2, 5))
+			# P2
+			elif (target_x, target_y) == (6, 0):
+				priority_list += ((5, 1), (5, 2), (4, 1))
+			# P3
+			elif (target_x, target_y) == (6, 6):
+				priority_list += ((5, 5), (4, 5), (5, 4))
+			# P4
+			elif (target_x, target_y) == (0, 0):
+				priority_list += ((1, 1), (2, 1), (1, 2))
+
+		# Top left 2x5 rectangle
+		if target_x in (0, 1) and target_y in (0, 1, 2, 3, 4):
+			priority_list += [(2, 4), (0, 2), (1, 4)]
+
+		# Top right 5x2 rectangle
+		elif target_x in (2, 3, 4, 5, 6) and target_y in (0, 1):
+			priority_list += ((2, 2), (4, 0), (2, 1))
+
+		# Bottom right 2x5 rectangle
+		elif target_x in (5, 6) and target_y in (2, 3, 4, 5, 6):
+			priority_list += ((4, 2), (6, 4), (5, 2))
+
+		# Bottom left 5x2 rectangle
+		elif target_x in (0, 1, 2, 3, 4) and target_y in (5, 6):
+			priority_list += ((4, 4), (2, 6), (4, 5))
+
+		# Centre 3x3 square
+		elif target_x in (2, 3, 4) and target_y in (2, 3, 4):
+			priority_list += ((3, 3), (3, 2), (4, 3), (3, 4), (2, 3))
+
+		# If the above aren't reachable, try the centre
+		priority_list += ((3, 3), (3, 2), (4, 3), (3, 4), (2, 3), (2, 2), (4, 2), (4, 4), (2, 4))
+
+		for tile_coord in priority_list:
+			if self.game.find_tile_by_board_coord(*tile_coord) in reachable_tiles:
+				return self.game.find_tile_by_board_coord(*tile_coord)
+
+		# If nothing else, try for a tile with three openings
+		for tile in reachable_tiles:
+			if tile.tiletype in (const.TOPRIGHTLEFT, const.TOPBOTTOMRIGHT, const.BOTTOMRIGHTLEFT, const.TOPBOTTOMLEFT):
+				return tile
+
+		# Nothing found - return a random tile
+		return random.choice(reachable_tiles)
 
 	def get_bot_player_move(self):
 		if self.game.is_anything_pushing():
 			return
 
-		if not self.attempts:
-			for i in range(5):
-				self.attempts.append(random.choice((pygame.K_UP, pygame.K_DOWN, pygame.K_RIGHT, pygame.K_LEFT)))
-		elif len(self.attempts) == 1:
-			self.process_keyboard_input(pygame.K_RETURN)
-		else:
-			self.process_keyboard_input(self.attempts.pop())
+		if not self.path_to_target_tile:
+			self.path_to_target_tile = self.transform_path_into_input(self.find_path_to_tile(self.get_target_tile()))
+			self.path_to_target_tile.append(pygame.K_RETURN)
+
+		self.process_keyboard_input(self.path_to_target_tile.pop(0))
+		self.last_bot_input = time.time()
 
 	def get_bot_action(self):
+		if time.time() - self.last_bot_input < const.BOT_INPUT_COOLDOWN:
+			return
+
 		if self.game.state == const.TILE_MOVING_STATE:
 			self.get_bot_tile_move()
 
@@ -268,28 +366,10 @@ class Player(pygame.sprite.Sprite):
 			self.get_bot_player_move()
 
 	def update(self, dt):
-
-
-
-
-		
-		tile_with_treasure = self.find_tile_containing_treasure(self.current_treasure_objective)
-		path_to_treasure = self.find_path_to_tile(tile_with_treasure)
-
-		if path_to_treasure:
-			print('----------')
-			print(self.player_id, tile_with_treasure.board_x, tile_with_treasure.board_y)
-			for i in range(len(path_to_treasure)):
-				print(i + 1, ' -> ', path_to_treasure[i].board_x, path_to_treasure[i].board_y)
-
-
-
-
-
-
 		self.signal = None
 
-		if self.bot and self.game.active_player == self:
+		# Only calculate bot actions on the server
+		if self.bot and self.game.active_player == self and (not self.game.side or self.game.side == const.P1):
 			self.get_bot_action()
 
 		if self.intent in (const.UP, const.DOWN, const.RIGHT, const.LEFT):
@@ -989,6 +1069,16 @@ class Game:
 		self.p1 = Player(const.P1, False, *const.PLAYER_STARTING_POSITIONS[const.P1], self, self.allsprites, self.allplayers)
 		self.p2 = Player(const.P2, False, *const.PLAYER_STARTING_POSITIONS[const.P2], self, self.allsprites, self.allplayers)
 
+
+
+
+
+		self.p1.bot, self.p2.bot = True, True
+
+
+
+
+
 		treasures = self.get_all_treasures()
 		random.shuffle(treasures)
 
@@ -1045,8 +1135,10 @@ class Game:
 			for textbox in self.alltextboxes:
 				if textbox.textbox_type == const.TURN_REMINDER:
 					reminder_textbox = textbox
+					break
 
 			reminder_textbox.change_text(winner + ' won!!!')
+			const.VICTORY_SOUND.play()
 
 	def create_arrows(self):
 		topleft_tile = self.find_tile_by_board_coord(0, 0)
@@ -1245,6 +1337,10 @@ class Game:
 				# Cycles through the acting_order list
 				self.active_player = self.acting_order[(self.acting_order.index(self.active_player) + 1) % len(self.acting_order)]
 
+				# Introduce a delay to the bots to avoid synchronization issues due to latency - horrible unreliable hack, good enough for me
+				if self.active_player.bot:
+					self.active_player.last_bot_input = time.time()
+
 				self.set_state(const.TILE_MOVING_STATE)
 
 			elif self.active_player.signal == const.VICTORY_SIGNAL:
@@ -1266,9 +1362,12 @@ class Game:
 	def update(self):
 		if self.state != const.GAMEOVER_STATE:
 			for sprite_group in self.update_order:
-				sprite_group.update(self.dt)
-			self.check_signals()
-			self.check_broadcasts()
+				# Check again in case a player won during this loop
+				if self.state != const.GAMEOVER_STATE:
+					sprite_group.update(self.dt)
+			if self.state != const.GAMEOVER_STATE:
+				self.check_signals()
+				self.check_broadcasts()
 
 	def draw(self):
 		self.screen.blit(const.BACKGROUND_IMAGE, (0, 0))
@@ -1295,11 +1394,11 @@ class Game:
 		
 		if self.state == const.TILE_MOVING_STATE:
 			if key in (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE, pygame.K_RETURN):
-				if not self.side or self.side == self.active_player.player_id:
+				if not self.active_player.bot and (not self.side or self.side == self.active_player.player_id):
 					self.moving_tile.process_keyboard_input(key)
 		elif self.state == const.PLAYER_MOVING_STATE:
 			if key in (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE, pygame.K_RETURN):
-				if not self.side or self.side == self.active_player.player_id:
+				if not self.active_player.bot and (not self.side or self.side == self.active_player.player_id):
 					self.active_player.process_keyboard_input(key)
 
 	def run(self):

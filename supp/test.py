@@ -1,16 +1,27 @@
 #!/Library/Frameworks/Python.framework/Versions/3.7/bin/python3
 
+l = [(0, 0), (0, 1), (0, 2)]
+l.append((0, 3))
+l += ((0, 4), (0, 5))
 
-a = ['a', 'b', 'c', 'd']
+print(l)
 
-el = a[1]
 
-for i in range(10):
-	el = a[(a.index(el) + 1) % len(a)]
 
-	print(el)
 
-print(a.pop())
+
+
+
+# a = ['a', 'b', 'c', 'd']
+
+# el = a[1]
+
+# for i in range(10):
+# 	el = a[(a.index(el) + 1) % len(a)]
+
+# 	print(el)
+
+# print(a.pop())
 
 
 
