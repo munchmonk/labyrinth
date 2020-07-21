@@ -1,10 +1,18 @@
 #!/Library/Frameworks/Python.framework/Versions/3.7/bin/python3
 
-l = [(0, 0), (0, 1), (0, 2)]
-l.append((0, 3))
-l += ((0, 4), (0, 5))
-
+l = [1, 2, 3, 5, 'ciao', 'pippo']
+l.remove('ciao')
 print(l)
+
+
+
+
+
+# l = [(0, 0), (0, 1), (0, 2)]
+# l.append((0, 3))
+# l += ((0, 4), (0, 5))
+
+# print(l)
 
 
 

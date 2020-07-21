@@ -19,6 +19,58 @@ import tile_module
 import player_module
 
 
+class ActionThread(threading.Thread):
+	def __init__(self, game):
+		threading.Thread.__init__(self)
+
+		self.game = game
+		self.command_queue = []
+		self.command_index = 0
+
+	def run(self):
+		while True:
+			if self.command_queue:
+
+
+				print('------')
+				print('Command queue:')
+				for command in self.command_queue:
+					print(command)
+
+
+
+				curr_command = None
+
+				for command in self.command_queue:
+					if command[0] == self.command_index:
+						curr_command = command
+
+				if curr_command:
+					success = False
+					sprite_type = curr_command[1]
+
+					if sprite_type == 'Tile':
+						intent = curr_command[2]
+						self.game.moving_tile.intent = intent
+						success = self.game.moving_tile.update(self.game.dt)
+
+					elif sprite_type == 'Player':
+						player_id = curr_command[2]
+						intent = curr_command[3]
+
+						player = self.game.find_player_by_id(player_id)
+						player.intent = intent
+						success = player.update(self.game.dt)
+
+					if success:
+						self.game.check_signals()
+						self.command_queue.remove(curr_command)
+						self.command_index += 1
+
+					else:
+						print('FAILED TO EXECUTE: ', curr_command)
+
+
 class ListenerThread(threading.Thread):
 	def __init__(self, game, my_socket):
 		threading.Thread.__init__(self)
@@ -26,30 +78,16 @@ class ListenerThread(threading.Thread):
 		self.game = game
 		self.my_socket = my_socket
 
+		self.action_thread = ActionThread(self.game)
+		self.action_thread.daemon = True
+		self.action_thread.start()
+
 	def run(self):
 		while True:
 			msg = self.my_socket.recv(1024)
 			msg = pickle.loads(msg)
 
-			sprite_type = msg[0]
-
-			if sprite_type == 'Tile':
-				board_x, board_y = msg[1], msg[2]
-				intent = msg[3]
-
-				tile = self.game.find_tile_by_board_coord(board_x, board_y)
-				tile.intent = intent
-				tile.update(self.game.dt)
-				self.game.check_signals()
-
-			elif sprite_type == 'Player':
-				player_id = msg[1]
-				intent = msg[2]
-
-				player = self.game.find_player_by_id(player_id)
-				player.intent = intent
-				player.update(self.game.dt)
-				self.game.check_signals()
+			self.action_thread.command_queue.append(msg)
 
 
 class Game:
@@ -83,6 +121,7 @@ class Game:
 		self.state = None
 
 		self.client_socket = None
+		self.command_index = 0
 
 		self.setup()
 
@@ -97,7 +136,16 @@ class Game:
 			pygame.mouse.set_visible(True)
 
 	def broadcast(self, message):
+		message.insert(0, self.command_index)
+		self.command_index += 1
+
 		self.client_socket.send(pickle.dumps(message))
+
+
+		print('-----')
+		print('Sending:')
+		print(message)
+
 
 	def find_player_by_id(self, player_id):
 		for player in self.allplayers:
@@ -152,7 +200,16 @@ class Game:
 		# Reload treasures on P1 (server player) to populate the card
 		self.p1.set_treasures(self.p1.treasures)
 
-		ListenerThread(self, self.client_socket).start()
+		t = ListenerThread(self, self.client_socket)
+		t.daemon = True
+		t.start()
+
+
+
+		self.p1.bot, self.p2.bot = True, True
+
+
+
 	
 	def start_client(self):
 		self.side = const.P2
@@ -199,7 +256,7 @@ class Game:
 			tiletype = tile[4]
 			treasure = tile[5]
 
-			new_tile = tile_module.Tile(rect_x, rect_y, board_x, board_y, tiletype, self.allsprites, self.alltiles)
+			new_tile = tile_module.Tile(rect_x, rect_y, board_x, board_y, tiletype, self, self.allsprites, self.alltiles)
 			new_tile.add_treasure(treasure)
 
 			# Set the moving tile!
@@ -251,6 +308,15 @@ class Game:
 
 		print('Synchronization successful.')
 
+
+
+
+		self.p1.bot, self.p2.bot = True, True
+
+
+
+
+
 	def find_tile_by_board_coord(self, board_x, board_y):
 		for tile in self.alltiles:
 			if tile.board_x == board_x and tile.board_y == board_y:
@@ -278,37 +344,37 @@ class Game:
 		tiles_that_need_treasure = []
 
 		# Corners
-		tile_module.Tile(const.LEFTBOARDMARGIN + 0 * const.TILESIZE, const.TOPBOARDMARGIN + 0 * const.TILESIZE, 0, 0, const.BOTTOMRIGHT, self.allsprites, self.alltiles)
-		tile_module.Tile(const.LEFTBOARDMARGIN + 6 * const.TILESIZE, const.TOPBOARDMARGIN + 0 * const.TILESIZE, 6, 0, const.BOTTOMLEFT, self.allsprites, self.alltiles)
-		tile_module.Tile(const.LEFTBOARDMARGIN + 6 * const.TILESIZE, const.TOPBOARDMARGIN + 6 * const.TILESIZE, 6, 6, const.TOPLEFT, self.allsprites, self.alltiles)
-		tile_module.Tile(const.LEFTBOARDMARGIN + 0 * const.TILESIZE, const.TOPBOARDMARGIN + 6 * const.TILESIZE, 0, 6, const.TOPRIGHT, self.allsprites, self.alltiles)
+		tile_module.Tile(const.LEFTBOARDMARGIN + 0 * const.TILESIZE, const.TOPBOARDMARGIN + 0 * const.TILESIZE, 0, 0, const.BOTTOMRIGHT, self, self.allsprites, self.alltiles)
+		tile_module.Tile(const.LEFTBOARDMARGIN + 6 * const.TILESIZE, const.TOPBOARDMARGIN + 0 * const.TILESIZE, 6, 0, const.BOTTOMLEFT, self, self.allsprites, self.alltiles)
+		tile_module.Tile(const.LEFTBOARDMARGIN + 6 * const.TILESIZE, const.TOPBOARDMARGIN + 6 * const.TILESIZE, 6, 6, const.TOPLEFT, self, self.allsprites, self.alltiles)
+		tile_module.Tile(const.LEFTBOARDMARGIN + 0 * const.TILESIZE, const.TOPBOARDMARGIN + 6 * const.TILESIZE, 0, 6, const.TOPRIGHT, self, self.allsprites, self.alltiles)
 
 		# Row 0
 		tiles_that_need_treasure += (
-		tile_module.Tile(const.LEFTBOARDMARGIN + 2 * const.TILESIZE, const.TOPBOARDMARGIN + 0 * const.TILESIZE, 2, 0, const.BOTTOMRIGHTLEFT, self.allsprites, self.alltiles),
-		tile_module.Tile(const.LEFTBOARDMARGIN + 4 * const.TILESIZE, const.TOPBOARDMARGIN + 0 * const.TILESIZE, 4, 0, const.BOTTOMRIGHTLEFT, self.allsprites, self.alltiles)
+		tile_module.Tile(const.LEFTBOARDMARGIN + 2 * const.TILESIZE, const.TOPBOARDMARGIN + 0 * const.TILESIZE, 2, 0, const.BOTTOMRIGHTLEFT, self, self.allsprites, self.alltiles),
+		tile_module.Tile(const.LEFTBOARDMARGIN + 4 * const.TILESIZE, const.TOPBOARDMARGIN + 0 * const.TILESIZE, 4, 0, const.BOTTOMRIGHTLEFT, self, self.allsprites, self.alltiles)
 		)
 
 		# Row 2
 		tiles_that_need_treasure += (
-		tile_module.Tile(const.LEFTBOARDMARGIN + 0 * const.TILESIZE, const.TOPBOARDMARGIN + 2 * const.TILESIZE, 0, 2, const.TOPBOTTOMRIGHT, self.allsprites, self.alltiles),
-		tile_module.Tile(const.LEFTBOARDMARGIN + 2 * const.TILESIZE, const.TOPBOARDMARGIN + 2 * const.TILESIZE, 2, 2, const.TOPBOTTOMRIGHT, self.allsprites, self.alltiles),
-		tile_module.Tile(const.LEFTBOARDMARGIN + 4 * const.TILESIZE, const.TOPBOARDMARGIN + 2 * const.TILESIZE, 4, 2, const.BOTTOMRIGHTLEFT, self.allsprites, self.alltiles),
-		tile_module.Tile(const.LEFTBOARDMARGIN + 6 * const.TILESIZE, const.TOPBOARDMARGIN + 2 * const.TILESIZE, 6, 2, const.TOPBOTTOMLEFT, self.allsprites, self.alltiles)
+		tile_module.Tile(const.LEFTBOARDMARGIN + 0 * const.TILESIZE, const.TOPBOARDMARGIN + 2 * const.TILESIZE, 0, 2, const.TOPBOTTOMRIGHT, self, self.allsprites, self.alltiles),
+		tile_module.Tile(const.LEFTBOARDMARGIN + 2 * const.TILESIZE, const.TOPBOARDMARGIN + 2 * const.TILESIZE, 2, 2, const.TOPBOTTOMRIGHT, self, self.allsprites, self.alltiles),
+		tile_module.Tile(const.LEFTBOARDMARGIN + 4 * const.TILESIZE, const.TOPBOARDMARGIN + 2 * const.TILESIZE, 4, 2, const.BOTTOMRIGHTLEFT, self, self.allsprites, self.alltiles),
+		tile_module.Tile(const.LEFTBOARDMARGIN + 6 * const.TILESIZE, const.TOPBOARDMARGIN + 2 * const.TILESIZE, 6, 2, const.TOPBOTTOMLEFT, self, self.allsprites, self.alltiles)
 		)
 
 		# Row 4
 		tiles_that_need_treasure += (
-		tile_module.Tile(const.LEFTBOARDMARGIN + 0 * const.TILESIZE, const.TOPBOARDMARGIN + 4 * const.TILESIZE, 0, 4, const.TOPBOTTOMRIGHT, self.allsprites, self.alltiles),
-		tile_module.Tile(const.LEFTBOARDMARGIN + 2 * const.TILESIZE, const.TOPBOARDMARGIN + 4 * const.TILESIZE, 2, 4, const.TOPRIGHTLEFT, self.allsprites, self.alltiles),
-		tile_module.Tile(const.LEFTBOARDMARGIN + 4 * const.TILESIZE, const.TOPBOARDMARGIN + 4 * const.TILESIZE, 4, 4, const.TOPBOTTOMLEFT, self.allsprites, self.alltiles),
-		tile_module.Tile(const.LEFTBOARDMARGIN + 6 * const.TILESIZE, const.TOPBOARDMARGIN + 4 * const.TILESIZE, 6, 4, const.TOPBOTTOMLEFT, self.allsprites, self.alltiles)
+		tile_module.Tile(const.LEFTBOARDMARGIN + 0 * const.TILESIZE, const.TOPBOARDMARGIN + 4 * const.TILESIZE, 0, 4, const.TOPBOTTOMRIGHT, self, self.allsprites, self.alltiles),
+		tile_module.Tile(const.LEFTBOARDMARGIN + 2 * const.TILESIZE, const.TOPBOARDMARGIN + 4 * const.TILESIZE, 2, 4, const.TOPRIGHTLEFT, self, self.allsprites, self.alltiles),
+		tile_module.Tile(const.LEFTBOARDMARGIN + 4 * const.TILESIZE, const.TOPBOARDMARGIN + 4 * const.TILESIZE, 4, 4, const.TOPBOTTOMLEFT, self, self.allsprites, self.alltiles),
+		tile_module.Tile(const.LEFTBOARDMARGIN + 6 * const.TILESIZE, const.TOPBOARDMARGIN + 4 * const.TILESIZE, 6, 4, const.TOPBOTTOMLEFT, self, self.allsprites, self.alltiles)
 		)
 
 		# Row 6
 		tiles_that_need_treasure += (
-		tile_module.Tile(const.LEFTBOARDMARGIN + 2 * const.TILESIZE, const.TOPBOARDMARGIN + 6 * const.TILESIZE, 2, 6, const.TOPRIGHTLEFT, self.allsprites, self.alltiles),
-		tile_module.Tile(const.LEFTBOARDMARGIN + 4 * const.TILESIZE, const.TOPBOARDMARGIN + 6 * const.TILESIZE, 4, 6, const.TOPRIGHTLEFT, self.allsprites, self.alltiles)
+		tile_module.Tile(const.LEFTBOARDMARGIN + 2 * const.TILESIZE, const.TOPBOARDMARGIN + 6 * const.TILESIZE, 2, 6, const.TOPRIGHTLEFT, self, self.allsprites, self.alltiles),
+		tile_module.Tile(const.LEFTBOARDMARGIN + 4 * const.TILESIZE, const.TOPBOARDMARGIN + 6 * const.TILESIZE, 4, 6, const.TOPRIGHTLEFT, self, self.allsprites, self.alltiles)
 		)
 
 		for tile in tiles_that_need_treasure:
@@ -340,7 +406,7 @@ class Game:
 					moving_tiles.remove(tiletype)
 
 					new_tile = tile_module.Tile(const.LEFTBOARDMARGIN + i * const.TILESIZE, const.TOPBOARDMARGIN + j * const.TILESIZE, i, j, 
-									tiletype, self.allsprites, self.alltiles)
+									tiletype, self, self.allsprites, self.alltiles)
 					if new_tile.tiletype == const.TOPRIGHTLEFT:
 						new_tile.add_treasure(self.get_random_treasure())
 					elif new_tile.tiletype == const.TOPLEFT:
@@ -349,7 +415,7 @@ class Game:
 
 		last_tile = moving_tiles[0]
 		self.moving_tile = tile_module.Tile(const.LEFTBOARDMARGIN + 1 * const.TILESIZE, const.TOPBOARDMARGIN + 7 * const.TILESIZE, 1, 7, 
-								last_tile, self.allsprites, self.alltiles)	
+								last_tile, self, self.allsprites, self.alltiles)	
 		if self.moving_tile.tiletype == const.TOPRIGHTLEFT:
 			self.moving_tile.add_treasure(self.get_random_treasure())	
 		elif self.moving_tile.tiletype == const.TOPLEFT:
@@ -492,6 +558,7 @@ class Game:
 			sprite.kill()
 		self.p1, self.p2, self.p3, self.p4 = None, None, None, None
 		self.last_push = None
+		self.command_index = 0
 
 		self.create_fixed_tiles()
 		self.create_moving_tiles()
@@ -532,6 +599,9 @@ class Game:
 	def is_anything_pushing(self):
 		for tile in self.alltiles:
 			if tile.pushing:
+				return True
+		for player in self.allplayers:
+			if player.pushing:
 				return True
 		return False
 
@@ -619,13 +689,9 @@ class Game:
 
 		elif self.state == const.PLAYER_MOVING_STATE:
 			if self.active_player.signal == const.CONFIRM_MOVEMENT_SIGNAL:
+
 				# Cycles through the acting_order list
 				self.active_player = self.acting_order[(self.acting_order.index(self.active_player) + 1) % len(self.acting_order)]
-
-				# Introduce a delay to the bots to avoid synchronization issues due to latency - horrible unreliable hack, good enough for me
-				if self.active_player.bot:
-					self.active_player.last_input = time.time()
-
 				self.set_state(const.TILE_MOVING_STATE)
 
 			elif self.active_player.signal == const.VICTORY_SIGNAL:
@@ -649,7 +715,6 @@ class Game:
 		if self.side and self.side != const.P1:
 			return
 
-		# if self.active_player.bot and (not self.side or self.side == self.active_player.player_id):
 		if self.active_player.bot and time.time() - self.active_player.last_bot_action > const.BOT_INPUT_COOLDOWN:
 			if self.state in (const.TILE_MOVING_STATE, const.PLAYER_MOVING_STATE) and not self.is_anything_pushing():
 				self.active_player.bot_turn_to_act = True
@@ -661,7 +726,6 @@ class Game:
 			sprite_group.update(self.dt)
 		self.check_signals()
 		self.check_broadcasts()
-
 
 	def draw(self):
 		self.screen.blit(const.BACKGROUND_IMAGE, (0, 0))
@@ -688,10 +752,11 @@ class Game:
 
 		if not self.active_player.bot and (not self.side or self.side == self.active_player.player_id):
 			if key in (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE, pygame.K_RETURN):
-				if self.state == const.TILE_MOVING_STATE:
-					self.moving_tile.process_keyboard_input(key)
-				elif self.state == const.PLAYER_MOVING_STATE and not self.is_anything_pushing():
-					self.active_player.process_keyboard_input(key)
+				if not self.is_anything_pushing():
+					if self.state == const.TILE_MOVING_STATE:
+						self.moving_tile.process_keyboard_input(key)
+					elif self.state == const.PLAYER_MOVING_STATE:
+						self.active_player.process_keyboard_input(key)
 
 	def run(self):
 		while True:

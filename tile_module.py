@@ -5,8 +5,10 @@ import const
 
 
 class Tile(pygame.sprite.Sprite):
-	def __init__(self, rect_x, rect_y, board_x, board_y, tiletype, *groups):
+	def __init__(self, rect_x, rect_y, board_x, board_y, tiletype, game, *groups):
 		pygame.sprite.Sprite.__init__(self, *groups)
+
+		self.game = game
 
 		self.tiletype = tiletype
 		self.treasure = None
@@ -80,11 +82,9 @@ class Tile(pygame.sprite.Sprite):
 		elif key == pygame.K_RETURN:
 			self.intent = const.PUSH_SIGNAL
 
-		self.set_broadcast()
-
 	def set_broadcast(self):
 		if self.intent:
-			self.broadcast = ('Tile', self.board_x, self.board_y, self.intent)
+			self.broadcast = ['Tile', self.intent]
 
 	def reset_broadcast(self):
 		self.broadcast = None
@@ -204,6 +204,9 @@ class Tile(pygame.sprite.Sprite):
 	def update(self, dt):
 		self.signal = None
 
+		old_rect = self.rect.copy()
+		old_tiletype = self.tiletype
+
 		if self.intent in (const.UP, const.DOWN, const.RIGHT, const.LEFT):
 			self.move()
 		elif self.intent == const.ROTATE:
@@ -214,7 +217,40 @@ class Tile(pygame.sprite.Sprite):
 		if self.pushing:
 			self.keep_pushing(dt)
 
+		# True = something changed, False = things stayed the same
+		# Only broadcast if something actually happened; bots only broadcast from the server side
+
+		# This prevents pushing tiles from broadcasting
+		if self == self.game.moving_tile and self.intent:
+			
+			# This prevents tiles that didn't update from broadcasting
+			if self.signal or self.rect != old_rect or self.tiletype != old_tiletype:
+
+				# This prevents non active players from broadcasting
+				if self.game.side and self.game.side == self.game.active_player.player_id and not self.game.active_player.bot:
+					self.set_broadcast()
+
+				# This prevents clients from broadcasting bots' actions
+				elif self.game.side and self.game.side == const.P1 and self.game.active_player.bot:
+					self.set_broadcast()
+				self.intent = None
+				return True
+
 		self.intent = None
+		return False
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

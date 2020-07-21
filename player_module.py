@@ -54,7 +54,7 @@ class Player(pygame.sprite.Sprite):
 
 	def set_broadcast(self):
 		if self.intent:
-			self.broadcast = ('Player', self.player_id, self.intent)
+			self.broadcast = ['Player', self.player_id, self.intent]
 
 	def reset_broadcast(self):
 		self.broadcast = None
@@ -70,8 +70,6 @@ class Player(pygame.sprite.Sprite):
 			self.intent = const.DOWN
 		elif key == pygame.K_RETURN:
 			self.intent = const.CONFIRM_MOVEMENT_SIGNAL
-
-		self.set_broadcast()
 
 	def move(self):
 		if (self.intent == const.RIGHT and self.board_x < 6 and self.tile.right_open and
@@ -143,7 +141,6 @@ class Player(pygame.sprite.Sprite):
 
 			self.rect.x += step_x
 			self.pushing[0] -= step_x
-
 
 		if self.pushing[1]:
 			step_y = int(abs(self.pushing[1]) / self.pushing[1] * const.PUSHING_SPEED * dt)
@@ -368,6 +365,8 @@ class Player(pygame.sprite.Sprite):
 	def update(self, dt):
 		self.signal = None
 
+		old_rect = self.rect.copy()
+
 		if self.bot_turn_to_act:
 			self.get_bot_action()
 			self.bot_turn_to_act = False
@@ -383,7 +382,20 @@ class Player(pygame.sprite.Sprite):
 		if self.pushing:
 			self.keep_pushing(dt)
 
+		# True = something changed, False = things stayed the same
+		# Only broadcast if something actually happened; bots only broadcast from the server side
+
+		if (self.signal or self.rect != old_rect) and self.intent:
+			if self.bot and self.game.side and self.game.side == const.P1:
+				self.set_broadcast()
+			elif not self.bot and self.game.side and self.game.side == self.player_id:
+				self.set_broadcast()
+			self.intent = None
+			return True
+
 		self.intent = None
+		return False
+
 
 
 
