@@ -67,7 +67,7 @@ GAMEOVER_STATE = 'GAMEOVER_STATE'
 # Game constants
 #	- player
 PLAYER_STARTING_POSITIONS =    {P1: (0, 6), P2: (6, 0), P3: (6, 6), P4: (0, 0)}
-PUSHING_SPEED = 2
+PUSHING_SPEED = 0.05
 
 #	- tile
 TILESIZE = 84
