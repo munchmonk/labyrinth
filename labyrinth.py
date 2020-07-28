@@ -204,13 +204,6 @@ class Game:
 		t.daemon = True
 		t.start()
 
-
-
-		self.p1.bot, self.p2.bot = True, True
-
-
-
-	
 	def start_client(self):
 		self.side = const.P2
 
@@ -307,15 +300,6 @@ class Game:
 		self.active_player = self.p1
 
 		print('Synchronization successful.')
-
-
-
-
-		self.p1.bot, self.p2.bot = True, True
-
-
-
-
 
 	def find_tile_by_board_coord(self, board_x, board_y):
 		for tile in self.alltiles:
@@ -474,21 +458,21 @@ class Game:
 		self.state = state
 
 		if state == const.GAMEOVER_STATE:
-			if self.active_player == self.p1:
-				winner = 'Player 1'
-			elif self.active_player == self.p2:
-				winner = 'Player 2'
-			elif self.active_player == self.p3:
-				winner = 'Player 3'
-			elif self.active_player == self.p4:
-				winner = 'Player 4'
+			# if self.active_player == self.p1:
+			# 	winner = 'Player 1'
+			# elif self.active_player == self.p2:
+			# 	winner = 'Player 2'
+			# elif self.active_player == self.p3:
+			# 	winner = 'Player 3'
+			# elif self.active_player == self.p4:
+			# 	winner = 'Player 4'
 
-			for textbox in self.alltextboxes:
-				if textbox.textbox_type == const.TURN_REMINDER:
-					reminder_textbox = textbox
-					break
+			# for textbox in self.alltextboxes:
+			# 	if textbox.textbox_type == const.TURN_REMINDER:
+			# 		reminder_textbox = textbox
+			# 		break
 
-			reminder_textbox.change_text(winner + ' won!!!')
+			# reminder_textbox.change_text(winner + ' won!!!')
 			const.VICTORY_SOUND.play()
 
 	def create_arrows(self):

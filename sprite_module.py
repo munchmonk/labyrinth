@@ -91,18 +91,20 @@ class TextBox(pygame.sprite.Sprite):
 
 		if self.textbox_type == const.TURN_REMINDER:
 			if self.game.active_player.player_id == const.P1:
-				msg += 'Player 1,'
+				msg += 'Player 1'
 			elif self.game.active_player.player_id == const.P2:
-				msg += 'Player 2,'
+				msg += 'Player 2'
 			elif self.game.active_player.player_id == const.P3:
-				msg += 'Player 3,'
+				msg += 'Player 3'
 			elif self.game.active_player.player_id == const.P4:
-				msg += 'Player 4,'
+				msg += 'Player 4'
 
 			if self.game.state == const.TILE_MOVING_STATE:
-				msg += ' move a tile!'
+				msg += ', move a tile!'
 			elif self.game.state == const.PLAYER_MOVING_STATE:
-				msg += ' move your character!'
+				msg += ', move your character!'
+			elif self.game.state == const.GAMEOVER_STATE:
+				msg += ' won!!!'
 
 		elif self.textbox_type == const.SCOREKEEPER_1:
 			tot_treasures = const.TOT_TREASURES // len(self.game.allplayers)
