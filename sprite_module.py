@@ -2,9 +2,10 @@ import pygame
 
 import const
 
-class Arrow(pygame.sprite.Sprite):
+class Arrow(pygame.sprite.DirtySprite):
 	def __init__(self, board_x, board_y, orientation, *groups):
-		pygame.sprite.Sprite.__init__(self, *groups)
+		self._layer = 1
+		pygame.sprite.DirtySprite.__init__(self, *groups)
 
 		self.board_x, self.board_y = board_x, board_y
 		self.orientation = orientation
@@ -16,15 +17,21 @@ class Arrow(pygame.sprite.Sprite):
 	def block(self):
 		self.blocked = True
 		self.image = const.ARROW_BLOCKED_IMAGES[self.orientation]
+		self.dirty = 1
 
 	def unblock(self):
 		self.blocked = False
 		self.image = const.ARROW_NORMAL_IMAGES[self.orientation]
+		self.dirty = 1
+
+	# def update(self, dt):
+	# 	self.dirty = 1
 
 
-class Card(pygame.sprite.Sprite):
+class Card(pygame.sprite.DirtySprite):
 	def __init__(self, *groups):
-		pygame.sprite.Sprite.__init__(self, *groups)
+		self._layer = 1
+		pygame.sprite.DirtySprite.__init__(self, *groups)
 
 		self.image, self.rect = None, None
 		self.reload_image()
@@ -47,10 +54,14 @@ class Card(pygame.sprite.Sprite):
 		top = self.rect.height // 2 - const.TILESIZE // 2
 		self.image.blit(marker_image, (left, top))
 
+	def update(self, dt):
+		self.dirty = 0
 
-class TextBox(pygame.sprite.Sprite):	
+
+class TextBox(pygame.sprite.DirtySprite):	
 	def __init__(self, text, font, game, textbox_type, *groups, right=None, left=None, centerx=None, centery=None, top=None, bottom=None):
-		pygame.sprite.Sprite.__init__(self, *groups)
+		self._layer = 1
+		pygame.sprite.DirtySprite.__init__(self, *groups)
 
 		self.font = font
 		self.color = const.FONT_COLOR
@@ -87,6 +98,9 @@ class TextBox(pygame.sprite.Sprite):
 		self.adjust_rect()
 
 	def update(self, dt):
+		self.dirty = 0
+
+
 		msg = ''
 
 		if self.textbox_type == const.TURN_REMINDER:

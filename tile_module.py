@@ -4,9 +4,10 @@ import random
 import const
 
 
-class Tile(pygame.sprite.Sprite):
+class Tile(pygame.sprite.DirtySprite):
 	def __init__(self, rect_x, rect_y, board_x, board_y, tiletype, game, *groups):
-		pygame.sprite.Sprite.__init__(self, *groups)
+		self._layer = 2
+		pygame.sprite.DirtySprite.__init__(self, *groups)
 
 		self.game = game
 
@@ -122,6 +123,8 @@ class Tile(pygame.sprite.Sprite):
 			self.rect.y += step_y
 			self.pushing[1] -= step_y
 
+		self.dirty = 1
+
 		if self.pushing == [0, 0]:
 			self.pushing = None
 			if step_x:
@@ -129,20 +132,28 @@ class Tile(pygame.sprite.Sprite):
 			if step_y:
 				self.board_y += abs(step_y) / step_y
 
+			# Set players' tiles in case they have been warped to the other side - players update before tiles creating a bug, this avoids it
+			for player in self.game.allplayers:
+				player.set_tile()
+
 	def move(self):
 		# Move
 		if self.intent == const.RIGHT:
 			self.board_x += 2
 			self.rect.x += 2 * const.TILESIZE
+			self.dirty = 1
 		elif self.intent == const.LEFT:
 			self.board_x -= 2
 			self.rect.x -= 2 * const.TILESIZE
+			self.dirty = 1
 		elif self.intent == const.UP:
 			self.board_y -= 2
 			self.rect.y -= 2 * const.TILESIZE
+			self.dirty = 1
 		elif self.intent == const.DOWN:
 			self.board_y += 2
 			self.rect.y += 2 * const.TILESIZE
+			self.dirty = 1
 
 		# Check if moved beyond board edges - snap to board
 		if (self.board_x, self.board_y) == (-1, -1):
@@ -200,8 +211,11 @@ class Tile(pygame.sprite.Sprite):
 
 		self.set_image()
 		self.set_borders()
+		self.dirty = 1
 
 	def update(self, dt):
+		# self.dirty = 0
+
 		self.signal = None
 
 		old_rect = self.rect.copy()

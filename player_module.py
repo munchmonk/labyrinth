@@ -6,9 +6,10 @@ import const
 import sprite_module
 
 
-class Player(pygame.sprite.Sprite):
+class Player(pygame.sprite.DirtySprite):
 	def __init__(self, player_id, bot, board_x, board_y, game, *groups):
-		pygame.sprite.Sprite.__init__(self, *groups)
+		self._layer = 3
+		pygame.sprite.DirtySprite.__init__(self, *groups)
 
 		self.game = game	
 
@@ -163,23 +164,22 @@ class Player(pygame.sprite.Sprite):
 			if step_y:
 				self.board_y += abs(step_y) / step_y
 
-			# Warp to other side
+			# Warp to other side - the tile will call Player.set_tile() because they update after the players to avoid bugs
 			if self.board_y == -1:
 					self.board_y = 6
 					self.rect.y += 7 * const.TILESIZE
-					self.set_tile()
+
 			if self.board_y == 7:
 					self.board_y = 0
 					self.rect.y -= 7 * const.TILESIZE
-					self.set_tile()
+
 			if self.board_x == 7:
 				self.board_x = 0
 				self.rect.x -= 7 * const.TILESIZE
-				self.set_tile()
+
 			if self.board_x == -1:
 					self.board_x = 6
 					self.rect.x += 7 * const.TILESIZE
-					self.set_tile()
 
 	def find_reachable_tiles(self):
 		reachable_tiles = []
@@ -363,6 +363,9 @@ class Player(pygame.sprite.Sprite):
 			self.get_bot_player_move()
 
 	def update(self, dt):
+		# Players are always drawn
+		self.dirty = 1
+
 		self.signal = None
 
 		old_rect = self.rect.copy()

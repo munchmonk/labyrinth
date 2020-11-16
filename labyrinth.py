@@ -70,6 +70,9 @@ class ActionThread(threading.Thread):
 					else:
 						print('FAILED TO EXECUTE: ', curr_command)
 
+				else:
+					print("NO COMMAND SELECTED - command_index: ", self.command_index)
+
 
 class ListenerThread(threading.Thread):
 	def __init__(self, game, my_socket):
@@ -97,15 +100,21 @@ class Game:
 		self.dt = 0
 		self.fullscreen = False
 
-		self.allsprites = pygame.sprite.Group()
-		self.alltiles = pygame.sprite.Group()
-		self.allplayers = pygame.sprite.Group()
-		self.allcards = pygame.sprite.Group()
-		self.allarrows = pygame.sprite.Group()
-		self.alltextboxes = pygame.sprite.Group()
+		self.allsprites = pygame.sprite.LayeredDirty()
+		self.alltiles = pygame.sprite.LayeredDirty()
+		self.allplayers = pygame.sprite.LayeredDirty()
+		self.allcards = pygame.sprite.LayeredDirty()
+		self.allarrows = pygame.sprite.LayeredDirty()
+		self.alltextboxes = pygame.sprite.LayeredDirty()
 
 		self.update_order = [self.allplayers, self.alltiles, self.allarrows, self.allcards, self.alltextboxes]
-		self.print_order = [self.allarrows, self.allcards, self.alltiles, self.allplayers, self.alltextboxes]
+		self.allsprites.clear(self.screen, const.BACKGROUND_IMAGE)
+		# self.alltiles.clear(self.screen, const.BACKGROUND_IMAGE)
+		# self.allplayers.clear(self.screen, const.BACKGROUND_IMAGE)
+		# self.allcards.clear(self.screen, const.BACKGROUND_IMAGE)
+		# self.allarrows.clear(self.screen, const.BACKGROUND_IMAGE)
+		# self.alltextboxes.clear(self.screen, const.BACKGROUND_IMAGE)
+		# self.print_order = [self.allarrows, self.allcards, self.alltiles, self.allplayers, self.alltextboxes]
 
 		self.p1 = None
 		self.p2 = None
@@ -146,7 +155,6 @@ class Game:
 		print('Sending:')
 		print(message)
 
-
 	def find_player_by_id(self, player_id):
 		for player in self.allplayers:
 			if player.player_id == player_id:
@@ -167,7 +175,10 @@ class Game:
 			self.add_bot()
 
 		server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		host = socket.gethostname()
+
+		# The below commented out line doesn't allow other machines to connect. Use '' instead
+		# host = socket.gethostbyname("localhost")
+		host = ''
 		port = 9999
 
 		server_socket.bind((host, port))
@@ -215,7 +226,7 @@ class Game:
 			card.kill()
 
 		self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		host = socket.gethostname()
+		host = socket.gethostbyname("localhost")
 		port = 9999
 
 		self.client_socket.connect((host, port))
@@ -712,11 +723,16 @@ class Game:
 		self.check_broadcasts()
 
 	def draw(self):
-		self.screen.blit(const.BACKGROUND_IMAGE, (0, 0))
-		for sprite_group in self.print_order:
-			sprite_group.draw(self.screen)
 
-		pygame.display.flip()
+		# -------------- BUG:
+		# for some reason when the tiles are drawn,the whole 1280x768 screen is returned as a rect that needs updating
+		# if this actually worked, some sprites wouldn't get drawn as I haven't set their dirty behaviour yet
+		# This means that as of now I purposefully left the game bugged (by not defining the sprites' dirty behaviour)
+		# so that it's easier to tell if this actual bug still exists or not
+
+
+		rects_to_update = self.allsprites.draw(self.screen)
+		pygame.display.update(rects_to_update)
 
 	def process_keyboard_input(self, key):
 		if key == pygame.K_ESCAPE:
