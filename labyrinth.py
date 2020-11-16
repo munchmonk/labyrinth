@@ -132,7 +132,56 @@ class Game:
 		self.client_socket = None
 		self.command_index = 0
 
-		self.setup()
+		self.buttons = []
+
+
+
+
+
+	def show_starting_screen(self):
+		self.set_state(const.STARTING_SCREEN_STATE)
+
+		# Play button
+		play_button_surf = const.BUTTON_IMAGES[const.PLAY]
+		play_button_rect = play_button_surf.get_rect(center=(const.SCREENWIDTH / 2, const.SCREENHEIGHT / 2 - 300))
+		play_button = (play_button_rect, const.PLAY)
+		self.buttons.append(play_button)
+
+		# Start server button
+		start_server_button_surf = const.BUTTON_IMAGES[const.START_SERVER]
+		start_server_button_rect = start_server_button_surf.get_rect(center=(const.SCREENWIDTH / 2, const.SCREENHEIGHT / 2 - 100))
+		start_server_button = (start_server_button_rect, const.START_SERVER)
+		self.buttons.append(start_server_button)
+
+		# Start client button
+		start_client_button_surf = const.BUTTON_IMAGES[const.START_CLIENT]
+		start_client_button_rect = start_client_button_surf.get_rect(center=(const.SCREENWIDTH / 2, const.SCREENHEIGHT / 2 + 100))
+		start_client_button = (start_client_button_rect, const.START_CLIENT)
+		self.buttons.append(start_client_button)
+
+		# Add bot button
+		add_bot_button_surf = const.BUTTON_IMAGES[const.ADD_BOT]
+		add_bot_button_rect = add_bot_button_surf.get_rect(center=(const.SCREENWIDTH / 2, const.SCREENHEIGHT / 2 + 300))
+		add_bot_button = (add_bot_button_rect, const.ADD_BOT)
+		self.buttons.append(add_bot_button)		
+
+		self.screen.blit(const.BACKGROUND_IMAGE, (0, 0))
+		self.screen.blit(play_button_surf, play_button_rect)
+		self.screen.blit(start_server_button_surf, start_server_button_rect)
+		self.screen.blit(start_client_button_surf, start_client_button_rect)
+		self.screen.blit(add_bot_button_surf, add_bot_button_rect)
+
+		pygame.display.flip()
+
+
+
+
+	def ask_for_server_ip_address(self):
+		pass
+
+
+
+
 
 	def toggle_fullscreen(self):
 		self.fullscreen = not self.fullscreen
@@ -716,11 +765,12 @@ class Game:
 				self.active_player.last_bot_action = time.time()
 
 	def update(self):
-		self.update_bots()
-		for sprite_group in self.update_order:
-			sprite_group.update(self.dt)
-		self.check_signals()
-		self.check_broadcasts()
+		if self.state in (const.TILE_MOVING_STATE, const.PLAYER_MOVING_STATE):
+			self.update_bots()
+			for sprite_group in self.update_order:
+				sprite_group.update(self.dt)
+			self.check_signals()
+			self.check_broadcasts()
 
 	def draw(self):
 
@@ -730,13 +780,50 @@ class Game:
 		# This means that as of now I purposefully left the game bugged (by not defining the sprites' dirty behaviour)
 		# so that it's easier to tell if this actual bug still exists or not
 
+		if self.state in (const.TILE_MOVING_STATE, const.PLAYER_MOVING_STATE):
+			rects_to_update = self.allsprites.draw(self.screen)
+			pygame.display.update(rects_to_update)
 
-		rects_to_update = self.allsprites.draw(self.screen)
-		pygame.display.update(rects_to_update)
+
+
+
+
+	def process_mouse_input(self, button):
+		# button is a tuple (rect, mouse_button_index)
+		# 1 = left click, 3 = right click
+		if self.state == const.STARTING_SCREEN_STATE and button == 1:
+			for button in self.buttons:
+				if button[0].collidepoint(pygame.mouse.get_pos()):
+					if button[1] == const.PLAY:
+						self.set_state(const.TILE_MOVING_STATE)
+						self.buttons = []
+					elif button[1] == const.START_SERVER:
+						self.start_server()
+						self.buttons = []
+						print('Started server!')
+					elif button[1] == const.START_CLIENT:
+						self.start_client()
+						self.buttons = []
+						print('Started client!')
+					elif button[1] == const.ADD_BOT:
+						self.add_bot()
+						print('Added one bot!')
+				
+
+
+
+
+
+
 
 	def process_keyboard_input(self, key):
 		if key == pygame.K_ESCAPE:
 			self.quit()
+
+		elif key == pygame.K_o and self.state == const.STARTING_SCREEN_STATE:
+			self.set_state(const.TILE_MOVING_STATE)
+
+
 		elif key == pygame.K_w:
 			self.toggle_fullscreen()
 		elif key == pygame.K_d:
@@ -748,24 +835,34 @@ class Game:
 		elif key == pygame.K_s and not self.side:
 			self.start_server()
 		elif key == pygame.K_c and not self.side:
-				self.start_client()
+			self.start_client()
 
-		if not self.active_player.bot and (not self.side or self.side == self.active_player.player_id):
-			if key in (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE, pygame.K_RETURN):
-				if not self.is_anything_pushing():
-					if self.state == const.TILE_MOVING_STATE:
-						self.moving_tile.process_keyboard_input(key)
-					elif self.state == const.PLAYER_MOVING_STATE:
-						self.active_player.process_keyboard_input(key)
+		if self.state in (const.PLAYER_MOVING_STATE, const.TILE_MOVING_STATE):
+			if not self.active_player.bot and (not self.side or self.side == self.active_player.player_id):
+				if key in (pygame.K_RIGHT, pygame.K_LEFT, pygame.K_UP, pygame.K_DOWN, pygame.K_SPACE, pygame.K_RETURN):
+					if not self.is_anything_pushing():
+						if self.state == const.TILE_MOVING_STATE:
+							self.moving_tile.process_keyboard_input(key)
+						elif self.state == const.PLAYER_MOVING_STATE:
+							self.active_player.process_keyboard_input(key)
 
 	def run(self):
+		self.setup()
+
+		self.show_starting_screen()
+
+		
+
 		while True:
 			for event in pygame.event.get():
 				if event.type == pygame.QUIT:
 					self.quit()
 				elif event.type == pygame.KEYDOWN:
 					self.process_keyboard_input(event.key)
+				elif event.type == pygame.MOUSEBUTTONDOWN:
+					self.process_mouse_input(event.button)
 
+	
 			self.update()
 			self.draw()
 			self.dt = self.clock.tick(const.FPS)

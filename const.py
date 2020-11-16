@@ -61,6 +61,13 @@ SCOREKEEPER_4 = 'SCOREKEEPER_4'
 TILE_MOVING_STATE = 'TILE_MOVING_STATE'
 PLAYER_MOVING_STATE = 'PLAYER_MOVING_STATE'
 GAMEOVER_STATE = 'GAMEOVER_STATE'
+STARTING_SCREEN_STATE = 'STARTING_SCREEN_STATE'
+
+#  - buttons
+PLAY = 'PLAY'
+START_SERVER = 'START_SERVER'
+START_CLIENT = 'START_CLIENT'
+ADD_BOT = 'ADD_BOT'
 
 
 # ---------------------------------------------------
@@ -104,6 +111,7 @@ MARKER_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/marke
 CARD_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/cards/')
 ARROW_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/arrows/')
 BACKGROUND_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/backgrounds/')
+BUTTONS_IMAGE_PATH = os.path.join(os.path.dirname(__file__), 'assets/images/buttons/')
 
 #	- fonts
 FONT_PATH = os.path.join(os.path.dirname(__file__), 'assets/fonts/fff_font.ttf')
@@ -177,6 +185,11 @@ ARROW_BLOCKED_IMAGES = {UP: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_up_block
 						RIGHT: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_right_blocked.png'),
 						DOWN: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_down_blocked.png'),
 						LEFT: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_left_blocked.png')}
+
+BUTTON_IMAGES =    {PLAY: pygame.image.load(BUTTONS_IMAGE_PATH + 'play_button.png'),
+					START_SERVER: pygame.image.load(BUTTONS_IMAGE_PATH + 'start_server_button.png'),
+					START_CLIENT: pygame.image.load(BUTTONS_IMAGE_PATH + 'start_client_button.png'),
+					ADD_BOT: pygame.image.load(BUTTONS_IMAGE_PATH + 'add_bot_button.png')}
 
 #	- fonts
 FONT = pygame.freetype.Font(FONT_PATH, FONT_SIZE)
