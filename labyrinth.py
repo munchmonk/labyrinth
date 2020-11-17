@@ -108,7 +108,7 @@ class Game:
 		self.alltextboxes = pygame.sprite.LayeredDirty()
 
 		self.update_order = [self.allplayers, self.alltiles, self.allarrows, self.allcards, self.alltextboxes]
-		self.allsprites.clear(self.screen, const.BACKGROUND_IMAGE)
+		self.allsprites.clear(self.screen, const.BACKGROUND_IMAGES[const.STANDARD_BACKGROUND])
 		# self.alltiles.clear(self.screen, const.BACKGROUND_IMAGE)
 		# self.allplayers.clear(self.screen, const.BACKGROUND_IMAGE)
 		# self.allcards.clear(self.screen, const.BACKGROUND_IMAGE)
@@ -132,11 +132,13 @@ class Game:
 		self.client_socket = None
 		self.command_index = 0
 
+		# Main menu buttons
 		self.buttons = []
 
-
-
-
+		# Server ip selection textbox
+		self.server_ip_surf = None
+		self.server_ip_rect = None
+		self.server_ip_text = ""
 
 	def show_starting_screen(self):
 		self.set_state(const.STARTING_SCREEN_STATE)
@@ -165,7 +167,7 @@ class Game:
 		add_bot_button = (add_bot_button_rect, const.ADD_BOT)
 		self.buttons.append(add_bot_button)		
 
-		self.screen.blit(const.BACKGROUND_IMAGE, (0, 0))
+		self.screen.blit(const.BACKGROUND_IMAGES[const.STANDARD_BACKGROUND], (0, 0))
 		self.screen.blit(play_button_surf, play_button_rect)
 		self.screen.blit(start_server_button_surf, start_server_button_rect)
 		self.screen.blit(start_client_button_surf, start_client_button_rect)
@@ -173,15 +175,11 @@ class Game:
 
 		pygame.display.flip()
 
+	def get_server_ip_address(self):
+		self.set_state(const.SERVER_IP_SELECTION_STATE)
 
-
-
-	def ask_for_server_ip_address(self):
-		pass
-
-
-
-
+		self.server_ip_surf, self.server_ip_rect = const.FONT.render(self.server_ip_text, const.FONT_COLOR)
+		self.server_ip_rect.center = (const.SCREENWIDTH / 2, const.SCREENHEIGHT / 2)
 
 	def toggle_fullscreen(self):
 		self.fullscreen = not self.fullscreen
@@ -275,7 +273,10 @@ class Game:
 			card.kill()
 
 		self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		host = socket.gethostbyname("localhost")
+
+		# Uncomment to quickly test locally - 192.168.1.15/19
+		# host = socket.gethostbyname("localhost")
+		host = self.server_ip_text
 		port = 9999
 
 		self.client_socket.connect((host, port))
@@ -784,9 +785,10 @@ class Game:
 			rects_to_update = self.allsprites.draw(self.screen)
 			pygame.display.update(rects_to_update)
 
-
-
-
+		elif self.state == const.SERVER_IP_SELECTION_STATE:
+			self.screen.blit(const.BACKGROUND_IMAGES[const.SERVER_IP_SELECTION_BACKGROUND], (0, 0))
+			self.screen.blit(self.server_ip_surf, self.server_ip_rect)
+			pygame.display.flip()
 
 	def process_mouse_input(self, button):
 		# button is a tuple (rect, mouse_button_index)
@@ -802,40 +804,36 @@ class Game:
 						self.buttons = []
 						print('Started server!')
 					elif button[1] == const.START_CLIENT:
-						self.start_client()
+						self.get_server_ip_address()
 						self.buttons = []
-						print('Started client!')
 					elif button[1] == const.ADD_BOT:
 						self.add_bot()
 						print('Added one bot!')
-				
-
-
-
-
-
-
 
 	def process_keyboard_input(self, key):
 		if key == pygame.K_ESCAPE:
 			self.quit()
 
-		elif key == pygame.K_o and self.state == const.STARTING_SCREEN_STATE:
-			self.set_state(const.TILE_MOVING_STATE)
+		# ---- Deprecated keyboard inputs
 
+		# elif key == pygame.K_o and self.state == const.STARTING_SCREEN_STATE:
+		# 	self.set_state(const.TILE_MOVING_STATE)
 
 		elif key == pygame.K_w:
 			self.toggle_fullscreen()
 		elif key == pygame.K_d:
 			import pdb; pdb.set_trace()
-		elif key == pygame.K_a and not self.side:
-			self.add_bot()
-		elif key == pygame.K_r and not self.side:
-			self.setup()
-		elif key == pygame.K_s and not self.side:
-			self.start_server()
-		elif key == pygame.K_c and not self.side:
-			self.start_client()
+
+		# ---- Deprecated keyboard inputs
+
+		# elif key == pygame.K_a and not self.side:
+		# 	self.add_bot()
+		# elif key == pygame.K_r and not self.side:
+		# 	self.setup()
+		# elif key == pygame.K_s and not self.side:
+		# 	self.start_server()
+		# elif key == pygame.K_c and not self.side:
+		# 	self.start_client()
 
 		if self.state in (const.PLAYER_MOVING_STATE, const.TILE_MOVING_STATE):
 			if not self.active_player.bot and (not self.side or self.side == self.active_player.player_id):
@@ -846,12 +844,20 @@ class Game:
 						elif self.state == const.PLAYER_MOVING_STATE:
 							self.active_player.process_keyboard_input(key)
 
+		elif self.state == const.SERVER_IP_SELECTION_STATE:
+			if key == pygame.K_BACKSPACE and self.server_ip_text:
+				self.server_ip_text = self.server_ip_text[:-1]
+			elif key in const.PYGAME_KEYS.keys():
+				self.server_ip_text += const.PYGAME_KEYS[key]
+			elif key == pygame.K_RETURN:
+				self.start_client()
+					
+			self.server_ip_surf, self.server_ip_rect = const.FONT.render(self.server_ip_text, const.FONT_COLOR)
+			self.server_ip_rect.center = (const.SCREENWIDTH / 2, const.SCREENHEIGHT / 2)
+
 	def run(self):
 		self.setup()
-
 		self.show_starting_screen()
-
-		
 
 		while True:
 			for event in pygame.event.get():
@@ -862,7 +868,6 @@ class Game:
 				elif event.type == pygame.MOUSEBUTTONDOWN:
 					self.process_mouse_input(event.button)
 
-	
 			self.update()
 			self.draw()
 			self.dt = self.clock.tick(const.FPS)
