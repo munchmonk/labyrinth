@@ -63,6 +63,7 @@ PLAYER_MOVING_STATE = 'PLAYER_MOVING_STATE'
 GAMEOVER_STATE = 'GAMEOVER_STATE'
 STARTING_SCREEN_STATE = 'STARTING_SCREEN_STATE'
 SERVER_IP_SELECTION_STATE = 'SERVER_IP_SELECTION'
+SERVER_STARTED_STATE = 'SERVER_STARTED_STATE'
 
 #  - buttons
 PLAY = 'PLAY'
@@ -73,6 +74,7 @@ ADD_BOT = 'ADD_BOT'
 #  - background
 STANDARD_BACKGROUND = 'STANDARD_BACKGROUND'
 SERVER_IP_SELECTION_BACKGROUND = 'SERVER_IP_SELECTION_BACKGROUND'
+SERVER_STARTED_BACKGROUND = 'SERVER_STARTED_BACKGROUND'
 
 
 # ---------------------------------------------------
@@ -179,7 +181,8 @@ MARKER_IMAGES =    {P1: pygame.image.load(MARKER_IMAGE_PATH + 'marker_p1.png'),
 EMPTY_CARD_IMAGE = pygame.image.load(CARD_PATH + 'empty_card.png')
 
 BACKGROUND_IMAGES =    {STANDARD_BACKGROUND: pygame.image.load(BACKGROUND_IMAGE_PATH + 'background.png'),
-						SERVER_IP_SELECTION_BACKGROUND: pygame.image.load(BACKGROUND_IMAGE_PATH + 'server_ip_selection_background.png')}
+						SERVER_IP_SELECTION_BACKGROUND: pygame.image.load(BACKGROUND_IMAGE_PATH + 'server_ip_selection_background.png'),
+						SERVER_STARTED_BACKGROUND: pygame.image.load(BACKGROUND_IMAGE_PATH + 'server_started_background.png')}
 
 
 ARROW_NORMAL_IMAGES =  {UP: pygame.image.load(ARROW_IMAGE_PATH + 'arrow_up.png'),

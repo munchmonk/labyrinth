@@ -1,5 +1,14 @@
 #!/Library/Frameworks/Python.framework/Versions/3.7/bin/python3
 
+
+
+"""
+	TODO:
+		- restart the game after game over and if both players want to during the game
+		- display number of bots in starting screen
+		- instructions
+"""
+
 import pygame
 import pygame.freetype
 pygame.init()
@@ -91,6 +100,58 @@ class ListenerThread(threading.Thread):
 			msg = pickle.loads(msg)
 
 			self.action_thread.command_queue.append(msg)
+
+
+
+
+
+
+
+class ServerListenerThread(threading.Thread):
+	def __init__(self, game, server_socket):
+		threading.Thread.__init__(self)
+
+		self.game = game
+		self.server_socket = server_socket
+
+	def run(self):
+		self.game.client_socket, client_address = self.server_socket.accept()
+
+		print('I received a connection from: ' + str(client_address))
+
+		# Send tiles
+		tiles_to_send = []
+		for tile in self.game.alltiles:
+			tiles_to_send.append((tile.rect.top, tile.rect.left, tile.board_x, tile.board_y, tile.tiletype, tile.treasure))
+		self.game.client_socket.send(pickle.dumps(tiles_to_send))
+
+		# Receive confirmation
+		while True:
+			msg = self.game.client_socket.recv(1024).decode('ascii')
+			if msg == 'TILES OK':
+				break
+
+		# Send players
+		players_to_send = []
+		for player in self.game.allplayers:
+			players_to_send.append((player.player_id, player.board_x, player.board_y, player.treasures))
+		self.game.client_socket.send(pickle.dumps(players_to_send))
+
+		# Reload treasures on P1 (server player) to populate the card
+		self.game.p1.set_treasures(self.game.p1.treasures)
+
+		t = ListenerThread(self.game, self.game.client_socket)
+		t.daemon = True
+		t.start()
+
+		self.game.set_state(const.TILE_MOVING_STATE)
+
+		
+
+
+
+
+
 
 
 class Game:
@@ -209,6 +270,10 @@ class Game:
 
 		return None
 
+
+
+
+
 	def start_server(self):
 		self.side = const.P1
 
@@ -233,34 +298,59 @@ class Game:
 
 		print('I set up a server, listening for a connection...')
 
-		self.client_socket, client_address = server_socket.accept()
+		self.set_state(const.SERVER_STARTED_STATE)
 
-		print('I received a connection from: ' + str(client_address))
 
-		# Send tiles
-		tiles_to_send = []
-		for tile in self.alltiles:
-			tiles_to_send.append((tile.rect.top, tile.rect.left, tile.board_x, tile.board_y, tile.tiletype, tile.treasure))
-		self.client_socket.send(pickle.dumps(tiles_to_send))
 
-		# Receive confirmation
-		while True:
-			msg = self.client_socket.recv(1024).decode('ascii')
-			if msg == 'TILES OK':
-				break
 
-		# Send players
-		players_to_send = []
-		for player in self.allplayers:
-			players_to_send.append((player.player_id, player.board_x, player.board_y, player.treasures))
-		self.client_socket.send(pickle.dumps(players_to_send))
 
-		# Reload treasures on P1 (server player) to populate the card
-		self.p1.set_treasures(self.p1.treasures)
 
-		t = ListenerThread(self, self.client_socket)
+		t = ServerListenerThread(self, server_socket)
 		t.daemon = True
 		t.start()
+
+
+
+
+
+
+
+		# self.client_socket, client_address = server_socket.accept()
+
+		# print('I received a connection from: ' + str(client_address))
+
+		# # Send tiles
+		# tiles_to_send = []
+		# for tile in self.alltiles:
+		# 	tiles_to_send.append((tile.rect.top, tile.rect.left, tile.board_x, tile.board_y, tile.tiletype, tile.treasure))
+		# self.client_socket.send(pickle.dumps(tiles_to_send))
+
+		# # Receive confirmation
+		# while True:
+		# 	msg = self.client_socket.recv(1024).decode('ascii')
+		# 	if msg == 'TILES OK':
+		# 		break
+
+		# # Send players
+		# players_to_send = []
+		# for player in self.allplayers:
+		# 	players_to_send.append((player.player_id, player.board_x, player.board_y, player.treasures))
+		# self.client_socket.send(pickle.dumps(players_to_send))
+
+		# # Reload treasures on P1 (server player) to populate the card
+		# self.p1.set_treasures(self.p1.treasures)
+
+		# t = ListenerThread(self, self.client_socket)
+		# t.daemon = True
+		# t.start()
+
+
+
+
+
+
+
+
 
 	def start_client(self):
 		self.side = const.P2
@@ -790,6 +880,10 @@ class Game:
 			self.screen.blit(self.server_ip_surf, self.server_ip_rect)
 			pygame.display.flip()
 
+		elif self.state == const.SERVER_STARTED_STATE:
+			self.screen.blit(const.BACKGROUND_IMAGES[const.SERVER_STARTED_BACKGROUND], (0, 0))
+			pygame.display.flip()
+
 	def process_mouse_input(self, button):
 		# button is a tuple (rect, mouse_button_index)
 		# 1 = left click, 3 = right click
@@ -802,7 +896,7 @@ class Game:
 					elif button[1] == const.START_SERVER:
 						self.start_server()
 						self.buttons = []
-						print('Started server!')
+						# print('Started server!')
 					elif button[1] == const.START_CLIENT:
 						self.get_server_ip_address()
 						self.buttons = []
